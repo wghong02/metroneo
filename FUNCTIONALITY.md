@@ -1,156 +1,273 @@
 # Plannus — Functionality Reference
 
-Plannus is a React Native / Expo task-planning app. This document catalogs every
-functionality currently implemented in the codebase, described in
-implementation-agnostic terms so it can serve as the specification for ports to
-other platforms (e.g. a Swift library).
+Plannus is a task/event planner with performance tracking. This document catalogs
+every functionality in the app (as of the `dev` branch, the most complete
+version) in implementation-agnostic terms, so it can serve as the specification
+for the Swift port under `Sources/Plannus/`.
+
+The original app is React Native / Expo backed by **SQLite** (`plannus.db`).
+The Swift port re-implements the same domain model, persistence semantics,
+services, and analytics, with a SwiftUI front end.
+
+---
 
 ## 1. Overview
 
-The app is organized around a bottom tab bar with four destinations:
+Bottom tab bar with four destinations:
 
-| Tab | Screen | Status |
-| --- | --- | --- |
-| Calendar | `CalendarScreen` | Fully implemented — the core feature |
-| Tasks | `TaskScreen` | Fully implemented — a standalone simple to-do list |
-| Performance | `PerformanceScreen` | Placeholder (renders nothing) |
-| Settings | `SettingsScreen` | Placeholder (renders nothing) |
+| Tab | Purpose |
+| --- | --- |
+| **Calendar** | Month calendar; per-date list of **events** plus **incomplete tasks** due that day. |
+| **Tasks** | Full task manager: create/edit/delete, subtasks, completion with performance rating, Upcoming/Completed toggle. |
+| **Performance** | Analytics over completed tasks: period stats, weekly/monthly line charts, insights, recent list. |
+| **Settings** | Stack navigator: Personal Preferences → Performance Cutoffs; plus database management (test/stats/content/erase all). |
 
-There are **two independent data domains** that do not share storage:
+There are three persisted domains:
 
-1. **Scheduled tasks** — date-keyed tasks with a time and notes (Calendar tab).
-2. **Simple to-dos** — a flat list of text strings (Tasks tab).
+1. **Tasks** (+ **SubTasks**) — the core productivity model.
+2. **Events** — date-anchored calendar entries.
+3. **Preferences** — performance-rating cutoffs (key/value).
+
+---
 
 ## 2. Domain models
 
-### 2.1 Task (`models.ts`)
+### 2.1 BaseItem
+Common fields: `id?: string`, `title: string`, `notes?: string`.
 
-A scheduled task has:
+### 2.2 Task (extends BaseItem)
+- `id?` — string; from SQLite this is the integer row id rendered as a string.
+- `title` — required; defaults to `"New Task"` when blank.
+- `notes?`
+- `deadline: string` — ISO-ish. Stored as `"YYYY-MM-DDTHH:mm:ss"`. When the user
+  gives no time, it defaults to **`T23:59:59`**; with a time it is `T{HH:mm}:00`.
+- `priorityRating: number` — 0–100, default 50.
+- `performanceRating: number` — 0–100, default 50.
+- `completedAt: string` — `"YYYY-MM-DD"` when complete, or the sentinel **`"na"`**
+  when not complete.
+- `createDate: string` — `"YYYY-MM-DD"` (local, `en-CA` formatting). Required.
+- `frequencyPattern` — one of `daily | weekly | monthly | yearly | custom | none`
+  (default `none`).
+- `frequencyCount: number` — default 0 (UI default 1).
+- `recurring: boolean`.
+- `types?: string[]` — freeform tags (stored as a JSON string column).
+- `estimatedDuration?: number` (minutes), `actualDuration?: number`.
+- `performanceNotes?: string`.
+- `subTasks: SubTask[]`.
 
-- `id: string` — unique identifier. Generated as `Date.now().toString()`
-  (millisecond timestamp) at creation.
-- `title: string` — the task description. Required (empty title cancels a save).
-- `time: string` — 24-hour `"HH:mm"` clock time (e.g. `"09:00"`, `"14:30"`).
-- `notes?: string` — optional free-text notes.
+### 2.3 SubTask (extends BaseItem)
+Same rating/deadline/completion fields as Task, plus:
+- `parentTaskId?: string`
+- `order: number` — display order within the parent.
 
-### 2.2 TaskMap (`models.ts`)
+### 2.4 Event (extends BaseItem)
+- `id: string` — required (event-managed).
+- `date: string` — `"YYYY-MM-DD"`.
+- `allDay?: boolean`
+- `startTime?: string`, `endTime?: string` — `"HH:mm"`.
+- `EventMap = Record<dateString, Event[]>`.
 
-`TaskMap = Record<string, Task[]>` — a dictionary keyed by calendar date string
-in `"YYYY-MM-DD"` format (the format emitted by the calendar's `dateString`).
-Each value is the list of tasks scheduled for that date.
+---
 
-## 3. Scheduled-task persistence (`utils/taskStorage.ts`)
+## 3. Persistence (SQLite: `plannus.db`)
 
-Backed by a key/value store (`AsyncStorage`) under the key `"task"`. Values are
-JSON-serialized `TaskMap` objects.
+`initDatabase` enables `PRAGMA foreign_keys = ON` and creates three tables
+(idempotent `CREATE TABLE IF NOT EXISTS`):
 
-- **`loadTasks(): TaskMap`** — reads and JSON-parses the stored map; returns an
-  empty map (`{}`) when nothing is stored.
-- **`saveTasks(tasks: TaskMap): void`** — JSON-serializes and writes the entire
-  map back to storage.
-- **`deleteTask(tasks, date, index): TaskMap`** — removes the task at `index`
-  within the given `date`'s list, persists the updated map, and returns it. If
-  the date has no entry, the map is returned unchanged.
+- **tasks** — `id INTEGER PK AUTOINCREMENT`, all Task scalar fields; `types` is
+  TEXT (JSON), `recurring` is `INTEGER CHECK(0,1)`, `frequencyPattern` is a
+  `CHECK`-constrained enum. (Note: `performanceNotes` lives on the model but is
+  not a column in the original schema; the Swift port persists it.)
+- **subtasks** — `id INTEGER PK`, `parentTaskId` FK → `tasks(id)`
+  `ON DELETE CASCADE`, plus base/rating fields and `"order"`.
+- **events** — `id TEXT PK`, `date`, `title`, `notes`, `allDay`, `startTime`,
+  `endTime`.
 
-## 4. Calendar screen (`screens/CalendarScreen.tsx`)
+Data-layer operations:
 
-The primary feature. Combines a month calendar with a per-date task list.
+- **Tasks** (`taskDatabase.ts`) — `saveTasks(tasks)` runs in an exclusive
+  transaction that **deletes all tasks + subtasks then re-inserts** the whole
+  list (with defaulting/validation: title→`"New Task"`, ratings→0, etc.); the DB
+  assigns task ids; subtasks are inserted per parent. `loadTasks()` reads tasks
+  `ORDER BY createDate DESC`, loads each task's subtasks `ORDER BY "order"`,
+  parses `types` JSON defensively, coerces ids to strings, and skips rows missing
+  `id`/`title`/`createDate`.
+- **Events** (`eventDatabase.ts`) — `saveEvents(events)` (bulk delete+insert),
+  `saveEvent(event)` (`INSERT OR REPLACE`, single upsert), `deleteEvent(id)`,
+  `getEventById(id)`, `getEventsForDate(date)`, `loadEvents()`
+  `ORDER BY date ASC, startTime ASC, title ASC`. Requires `title` and `date`.
+- **Admin** (`database.ts`) — `getDatabaseStats()` (row counts + connection
+  check), `showDatabaseContent()` (human-readable dump of first 5 rows per
+  table), `resetDatabase()` (drops all tables in a transaction, then re-inits).
 
-### 4.1 Behaviors
+---
 
-- **Load on mount** — hydrates the in-memory `TaskMap` from storage.
-- **Date selection** — tapping a day selects it; the selected day is visually
-  marked. Until a date is selected, a "Select a date to view tasks" prompt is
-  shown instead of the task list.
-- **Task list for selected date** — shows the tasks for the selected date, each
-  row displaying the formatted time, the title, and a delete control. An empty
-  date shows "No tasks yet".
-- **Add task** — opens the task modal with defaults (empty title, time
-  `"09:00"`, empty notes) and no edit target.
-- **Edit task** — tapping a task's title opens the modal pre-filled with that
-  task's current values, targeting its index for replacement.
-- **Save task** (`handleSaveTask`):
-  - If the title is empty, the modal simply closes and nothing is saved.
-  - **Edit mode**: replaces the task at the edit index, preserving its `id`.
-  - **Add mode**: appends a new task with a freshly generated `id`.
-  - After add/edit, the date's task list is **sorted ascending by `time`**
-    (lexicographic compare on `"HH:mm"`, which is chronologically correct).
-  - The updated map is persisted, then in-memory state is updated and the modal
-    closes. A persistence failure is caught and logged.
-- **Delete task** — prompts for confirmation ("Delete Task / Are you sure?");
-  on confirm, removes the task via the storage `deleteTask` helper.
+## 4. Services (in-memory cache + singletons)
 
-### 4.2 Time formatting (`formatTime`)
+### 4.1 TaskService (singleton)
+Caches the task list. Persists by re-saving the whole list (the DB layer does
+delete-all + re-insert). Operations:
+- `loadTasks()`, `saveTasks(tasks)`
+- `addTask(task)` — title defaults to `"New Task"`, notes trimmed; appends.
+- `updateTask(updated)` — replaces the task with matching `id`.
+- `deleteTask(id)` — removes by id.
+- `completeTask(id)` — sets `completedAt` to today (`en-CA` `YYYY-MM-DD`).
+- `uncompleteTask(id)` — sets `completedAt` back to `"na"`.
+- `updateTaskPriority(id, priority)`.
+- `updateTaskPerformance(id, performance, notes?)` and
+  `updateCompletedTaskPerformance(id, performance, notes?)` — set
+  `performanceRating` (and `performanceNotes`).
 
-Converts a 24-hour `"HH:mm"` string to a 12-hour display string with meridiem:
+### 4.2 EventService (singleton)
+Caches events grouped by date (`Record<date, Event[]>`).
+- `loadEvents()` — loads all, groups by `date`.
+- `addEvent(date, event)` — forces `event.date = date`, upserts, updates cache.
+- `updateEvent(date, event)` — upsert + cache replace by id.
+- `deleteEvent(date, id)` — delete + cache prune (drops the date key when empty).
+- `moveEvent(oldDate, newDate, id)` — re-dates an event and moves it between
+  cache buckets.
+- `getEventsForDate(date)` — cache-first, else DB.
 
-- Hour `0` → `12`, hours `> 12` → `hour - 12`, otherwise the hour as-is.
-- `AM` when hour `< 12`, else `PM`.
-- Minutes are passed through unchanged.
-- Examples: `"00:00"` → `"12:00 AM"`, `"09:30"` → `"9:30 AM"`,
-  `"13:05"` → `"1:05 PM"`, `"23:30"` → `"11:30 PM"`.
+### 4.3 PerformancePreferencesService (singleton, key/value)
+Stores `PerformanceCutoffs { fair, good, veryGood, excellent }` under
+`@performance_cutoffs`.
+- **Defaults: `fair 60, good 75, veryGood 80, excellent 90`.**
+  (The Cutoffs *screen* seeds its inputs with `25/50/75/100`, but the service
+  default is `60/75/80/90`.)
+- `getCutoffs()`, `setCutoffs(c)`, `resetToDefaults()`.
+- `getPerformanceText(rating, cutoffs)` → `Excellent | Very Good | Good | Fair |
+  Poor` (Poor is anything below `fair`).
+- `getPerformanceColor(rating, cutoffs)` → hex:
+  Excellent `#2E7D32`, Very Good `#4CAF50`, Good `#2196F3`, Fair `#FF9800`,
+  Poor `#F44336`.
 
-## 5. New/Edit task modal (`components/NewTaskModal.tsx`)
+---
 
-A bottom-sheet form used for both creating and editing scheduled tasks.
+## 5. Utility functions
 
-### 5.1 Inputs
+- **`formatTime("HH:mm")`** → 12-hour `"h:mm AM/PM"` (hour 0→12, >12 subtract 12).
+- **`formatDeadline("YYYY-MM-DD[THH:mm:ss]")`** → localized date, and if a time
+  part is present, `"<date> at <formatTime(HH:mm)>"`.
+- **`getIncompleteTasksForDate(tasks, targetDate)`** → tasks whose `completedAt`
+  is `"na"` and whose deadline **date part** equals `targetDate` (exact day).
+- Time picker options: hours `00..23`, minutes `00..59` (per-minute); event/task
+  time strings are `"HH:mm"`. Date picker range: current year ±10.
 
-- **Title / description** — single-line text. The label is configurable
-  (`titleLabel`, default `"Task Description"`).
-- **Time** — chosen from a dropdown of preset options (see below); shown using
-  the same 12-hour `formatTime` display.
-- **Notes** — multi-line free text.
+---
 
-### 5.2 Time option generation (`generateTimeOptions`)
+## 6. Calendar tab
 
-Produces the selectable time slots: every 30 minutes across a full day, from
-`"00:00"` through `"23:30"` — 48 options total, each formatted `"HH:mm"` with
-zero-padding.
+- Month calendar; tap a day to select it (selected day highlighted). Before any
+  selection: prompt "Select a date to view events and tasks".
+- For the selected date, shows a combined list of **events** (for that date) then
+  **incomplete tasks due that date** (`getIncompleteTasksForDate`).
+  - Event row: title, start/end time (formatted), tap title to **edit**, ✕ to
+    **delete** (confirm alert). Empty → "No events or tasks yet".
+  - Task row (read-only here, visually distinct): title, `Deadline: …`, notes,
+    `Priority: N`.
+- **+ Add Event** opens the event modal. Data reloads when the screen refocuses.
 
-### 5.3 Actions
+### 6.1 New/Edit Event modal
+Fields: title (default "New Event"), **All Day** toggle (clears times when on;
+restores defaults `08:00`/`09:00` when off), start time & end time (wheel
+pickers, shown only when not all-day), notes. Empty title → just closes. Save
+emits `(title, startTime, endTime, notes, allDay)`; edit preserves the event id,
+add generates `event-{timestamp}-{rand}`.
 
-- **Cancel** — dismisses without saving.
-- **Save** — emits the current `(title, time, notes)` to the caller.
-- On (re)open the form fields reset to the provided initial values.
+---
 
-## 6. Simple to-do list (`screens/TaskScreen.tsx`)
+## 7. Tasks tab
 
-A standalone, flat to-do list independent of the calendar tasks.
+- Header toggle: **Upcoming (n)** / **Completed (n)**.
+  - Upcoming = `completedAt === "na"`, sorted by deadline date ascending.
+  - Completed = `completedAt !== "na"`, sorted by `completedAt` descending.
+- **FAB (+)** opens the New Task modal.
+- Task card shows: checkbox (toggle completion), title (tap to edit),
+  Priority + Performance/100, notes, `Created … | Deadline …`, estimated
+  duration, type tags, a subtask preview (first 2, "+N more"), and for completed
+  tasks the completed date + performance notes.
+- **Completion toggle**:
+  - Completing is **blocked if any subtask is incomplete** (alert). Otherwise it
+    opens the **Performance Rating** modal; saving the rating sets
+    `performanceRating`(+notes) and marks the task complete (`completedAt` =
+    today).
+  - Un-completing sets `completedAt = "na"`.
+- **Long-press a completed task** → reopen Performance Rating modal to edit its
+  rating/notes (does not change completion).
+- **Subtask checkbox** toggles that subtask's `completedAt` (today ↔ `"na"`).
+- **Swipe → Delete** (confirm alert).
 
-- **Storage** — key/value store under the key `"@todos_list"`, holding a
-  JSON array of strings.
-- **Load on mount** — hydrates the list from storage.
-- **Auto-persist** — writes the full list back to storage whenever it changes.
-- **Add to-do** — trims the input; ignores empty/whitespace-only input;
-  appends the trimmed text and clears the input.
-- **Delete to-do** — swipe reveals a delete action; deletion prompts for
-  confirmation ("Delete / Are you sure?") and removes the item at its index.
+### 7.1 New Task modal
+Fields and defaults: title ("New Task" when blank), Priority slider (0–100,
+default 50), Performance slider (0–100, default 50), Create Date (wheel, default
+today), Deadline date (wheel, default today) + optional deadline time,
+**Recurring** toggle → reveals Frequency Pattern buttons + Frequency Count,
+Estimated Duration (min), Task Types (add/remove tag chips), Subtasks
+(title+notes, add/remove; each subtask gets `order`), Notes. Deadline is composed
+as `T{time}:00` or `T23:59:59`. New tasks are created with `completedAt = "na"`.
 
-## 7. Navigation (`components/TabNavigator.tsx`)
+### 7.2 Edit Task modal
+Same fields, pre-populated from the task; preserves `id`.
 
-Bottom tab navigator with the four tabs listed in §1. Each tab has a filled
-icon when focused and an outline icon otherwise. Active tint `#007AFF`,
-inactive tint gray.
+### 7.3 Performance Rating modal
+A 0–100 slider (default 50; pre-filled with the task's rating when editing) plus
+optional notes. Save emits `(taskId, rating, notes?)`.
 
-## 8. Placeholder screens
+---
 
-`PerformanceScreen` (`screens/PerformanceScreen.tsx`) and `SettingsScreen`
-(`screens/SettingsScreen.tsx`) currently render nothing. Their storage keys
-`"performance"` and `"settings"` are declared but unused.
+## 8. Performance tab
 
-## 9. Behavior summary (for porting)
+- Pull-to-refresh reloads tasks + cutoffs.
+- **Period selector**: Week / Month / 3 Months / Year / All Time / Custom.
+  - Ranges end "now"; start = now − (7d / 1mo / 3mo / 1yr), All Time = epoch,
+    Custom = a user-entered `YYYY-MM-DD` (validated) start.
+  - Filters to **completed** tasks whose `completedAt` falls in range.
+- **Stat cards**: tasks completed in period, and average performance
+  (`sum/ count`, one decimal).
+- **Weekly chart** — last 5 weeks: for each week window, average performance of
+  tasks completed that week; label = that week's Monday (`MMM d`); trend up/down/
+  stable vs previous.
+- **Monthly chart** — last 5 months: average per month, label `MMM`.
+- **Insights**: Best Week, Best Month (max-average period), Overall Trend
+  (Improving/Declining/Neutral comparing last vs first weekly average), Total
+  Tasks (all completed).
+- **Recent Performance**: up to 10 filtered tasks, each with a colored
+  performance badge (`getPerformanceColor`/`Text`), completed date, rating/100,
+  and notes. Long-press → edit rating. Empty period → empty-state message.
 
-Pure, platform-independent logic worth preserving in any port:
+---
 
-1. **Task identity** — `id` = creation-time millisecond timestamp as a string.
-2. **Time model** — 24-hour `"HH:mm"` strings; sort lexicographically for
-   chronological order.
-3. **12-hour formatting** — as specified in §4.2.
-4. **30-minute slot generation** — 48 slots, `"00:00"`…`"23:30"` (§5.2).
-5. **Date-keyed map** — tasks grouped by `"YYYY-MM-DD"` date key.
-6. **Save semantics** — empty title is a no-op; edit preserves `id`; add
-   generates a new `id`; list re-sorted by time after each mutation.
-7. **Delete semantics** — remove by (date, index); missing date is a no-op.
-8. **Two separate stores** — scheduled tasks (`"task"`) and simple to-dos
-   (`"@todos_list"`).
+## 9. Settings tab (stack navigator)
+
+- **Settings** root:
+  - **Personal Preferences** → Personal Preferences screen.
+  - **Database Management**: Database Test (connection check), Database Stats
+    (row counts), Database Content (dump), **Erase All Data** (confirm →
+    `resetDatabase` → reload app).
+- **Personal Preferences** screen → row to **Performance Cutoffs**.
+- **Performance Cutoffs** screen: numeric inputs for fair/good/veryGood/excellent
+  (blank fields fall back to defaults on save), **Save Changes**, **Reset to
+  Defaults**. Description notes anything below "Fair" is "Poor".
+
+---
+
+## 10. App bootstrap
+On launch the app initializes the database (creates tables if missing) before
+rendering the tab navigator.
+
+---
+
+## 11. Port notes (Swift)
+The Swift implementation (`Sources/Plannus/`) mirrors the above:
+- Domain models are `Codable`/`Identifiable` structs.
+- A `TaskDatabase` protocol abstracts persistence; a SQLite-backed implementation
+  (`SQLiteDatabase`, via `SQLite3`) is the production default, and an
+  `InMemoryDatabase` backs tests/previews. Delete-all-then-insert save semantics
+  are preserved.
+- `TaskService`, `EventService`, and `PerformancePreferencesService` are
+  `ObservableObject` singletons matching the operations in §4.
+- `PerformanceAnalytics` implements the period filtering, averages, and
+  weekly/monthly series from §8.
+- SwiftUI views (`RootView`, `CalendarView`, `TaskListView`, `PerformanceView`,
+  `SettingsView` + sub-screens, and the task/event/rating sheets) implement the
+  UI behaviors in §6–§9, using the native graphical calendar and pickers.
