@@ -1,37 +1,27 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# macOS
+.DS_Store
 
-# dependencies
-node_modules/
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
 
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
+# Swift Package Manager
+.build/
+.swiftpm/
 
-# Native
-.kotlin/
-*.orig.*
+# Secrets / signing
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
 *.pem
-
-# local env files
 .env*.local
-
-# typescript
-*.tsbuildinfo

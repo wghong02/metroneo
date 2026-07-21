@@ -3,7 +3,7 @@ import CoreData
 
 /// Core Data–backed ``TaskDatabase``. The schema is defined by the
 /// `Plannus.xcdatamodeld` model (entities `CDTask`, `CDSubTask`, `CDEvent`),
-/// compiled by Xcode/SwiftPM into the module bundle.
+/// compiled by Xcode into `Plannus.momd` inside the app bundle.
 ///
 /// Save semantics mirror the original SQLite layer (FUNCTIONALITY.md §3):
 /// `saveTasks` replaces the entire task + subtask set inside one save; ids are
@@ -14,13 +14,13 @@ public final class CoreDataDatabase: TaskDatabase {
 
     /// - Parameter inMemory: when true, uses an in-memory store (previews/tests).
     public init(inMemory: Bool = false) throws {
-        guard
-            let modelURL = Bundle.module.url(forResource: "Plannus", withExtension: "momd"),
-            let model = NSManagedObjectModel(contentsOf: modelURL)
-        else {
-            throw PlannusError.database("Failed to load Core Data model 'Plannus.momd'")
+        // The compiled `Plannus.momd` lives in the app's main bundle; build the
+        // container from the merged model there (with automatic-lookup fallback).
+        if let model = NSManagedObjectModel.mergedModel(from: [Bundle.main]) {
+            container = NSPersistentContainer(name: "Plannus", managedObjectModel: model)
+        } else {
+            container = NSPersistentContainer(name: "Plannus")
         }
-        container = NSPersistentContainer(name: "Plannus", managedObjectModel: model)
         if inMemory {
             let desc = NSPersistentStoreDescription()
             desc.type = NSInMemoryStoreType

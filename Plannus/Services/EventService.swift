@@ -46,7 +46,7 @@ public final class EventService: ObservableObject {
     public func deleteEvent(date: String, id: String) {
         do {
             try db.deleteEvent(id: id)
-            var list = (eventsByDate[date] ?? []).filter { $0.id != id }
+            let list = (eventsByDate[date] ?? []).filter { $0.id != id }
             if list.isEmpty { eventsByDate.removeValue(forKey: date) } else { eventsByDate[date] = list }
         } catch {
             print("[EventService] Error deleting event:", error)
@@ -59,7 +59,7 @@ public final class EventService: ObservableObject {
         event.date = newDate
         do {
             try db.saveEvent(event)
-            var oldList = (eventsByDate[oldDate] ?? []).filter { $0.id != id }
+            let oldList = (eventsByDate[oldDate] ?? []).filter { $0.id != id }
             if oldList.isEmpty { eventsByDate.removeValue(forKey: oldDate) } else { eventsByDate[oldDate] = oldList }
             eventsByDate[newDate, default: []].append(event)
         } catch {

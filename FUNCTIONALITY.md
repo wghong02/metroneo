@@ -6,8 +6,9 @@ version) in implementation-agnostic terms, so it can serve as the specification
 for the Swift port under `Sources/Plannus/`.
 
 The original app is React Native / Expo backed by **SQLite** (`plannus.db`).
-The Swift port re-implements the same domain model, persistence semantics,
-services, and analytics, with a SwiftUI front end.
+The Swift port (a native Xcode iOS app under `Plannus/`) re-implements the same
+domain model, persistence semantics, services, and analytics with a SwiftUI
+front end, persisting through **Core Data** (model `Plannus.xcdatamodeld`).
 
 ---
 
@@ -258,10 +259,11 @@ rendering the tab navigator.
 ---
 
 ## 11. Port notes (Swift)
-The Swift implementation (`Sources/Plannus/`) mirrors the above:
+The Swift implementation (`Plannus/`, an Xcode app target) mirrors the above:
 - Domain models are `Codable`/`Identifiable` structs.
-- A `TaskDatabase` protocol abstracts persistence; a SQLite-backed implementation
-  (`SQLiteDatabase`, via `SQLite3`) is the production default, and an
+- A `TaskDatabase` protocol abstracts persistence; a **Core Data**–backed
+  implementation (`CoreDataDatabase`, model `Plannus.xcdatamodeld` with entities
+  `CDTask`, `CDSubTask`, `CDEvent`) is the production default, and an
   `InMemoryDatabase` backs tests/previews. Delete-all-then-insert save semantics
   are preserved.
 - `TaskService`, `EventService`, and `PerformancePreferencesService` are
