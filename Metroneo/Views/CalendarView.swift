@@ -111,6 +111,6 @@ private struct CalendarTaskRow: View {
             Text("Priority: \(task.priorityRating)")
                 .font(.caption.bold()).foregroundStyle(.blue)
         }
-        .listRowBackground(Color(hex: "#FFF3CD"))
+        .listRowBackground(Color.yellow.opacity(0.2))
     }
 }

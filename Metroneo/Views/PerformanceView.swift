@@ -77,8 +77,7 @@ struct PerformanceView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(hex: "#F8F9FA"), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#E0E0E0")))
+        .cardStyle()
     }
 
     private func chartCard(title: String, data: [PerformanceDataPoint]) -> some View {
@@ -88,14 +87,13 @@ struct PerformanceView: View {
                 LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
                     .interpolationMethod(.catmullRom)
                 PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
-                    .foregroundStyle(Color(hex: preferences.color(for: Int(point.average))))
+                    .foregroundStyle(preferences.color(for: Int(point.average)))
             }
             .chartYScale(domain: 0...100)
             .frame(height: 180)
         }
         .padding()
-        .background(Color(hex: "#F8F9FA"), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#E0E0E0")))
+        .cardStyle()
     }
 
     private var insights: some View {
@@ -112,8 +110,7 @@ struct PerformanceView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: "#F8F9FA"), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#E0E0E0")))
+        .cardStyle()
     }
 
     private func insightItem(_ label: String, _ value: String) -> some View {
@@ -151,7 +148,7 @@ struct PerformanceView: View {
                 Text(preferences.text(for: task.performanceRating))
                     .font(.caption2.bold())
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Color(hex: preferences.color(for: task.performanceRating)), in: Capsule())
+                    .background(preferences.color(for: task.performanceRating), in: Capsule())
                     .foregroundStyle(.white)
             }
             HStack {
@@ -166,6 +163,6 @@ struct PerformanceView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: "#F8F9FA"), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 }

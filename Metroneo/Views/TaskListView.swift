@@ -166,8 +166,8 @@ private struct TaskCard: View {
                         Text(type)
                             .font(.caption2)
                             .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Color(hex: "#E3F2FD"), in: Capsule())
-                            .foregroundStyle(Color(hex: "#1976D2"))
+                            .background(Color.blue.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.blue)
                     }
                 }
             }

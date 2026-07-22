@@ -20,24 +20,14 @@ public struct PerformanceCutoffs: Codable, Equatable {
     public static let defaults = PerformanceCutoffs(fair: 60, good: 75, veryGood: 80, excellent: 90)
 }
 
-/// Performance category label.
+/// Performance category label. The matching fill color lives in `Palette.swift`
+/// (a SwiftUI concern, kept out of the service).
 public enum PerformanceLevel: String {
     case excellent = "Excellent"
     case veryGood = "Very Good"
     case good = "Good"
     case fair = "Fair"
     case poor = "Poor"
-
-    /// Hex color for this performance level.
-    public var hex: String {
-        switch self {
-        case .excellent: return "#2E7D32"
-        case .veryGood:  return "#4CAF50"
-        case .good:      return "#2196F3"
-        case .fair:      return "#FF9800"
-        case .poor:      return "#F44336"
-        }
-    }
 }
 
 /// Persists ``PerformanceCutoffs`` under `@performance_cutoffs` and classifies
@@ -80,5 +70,4 @@ public final class PerformancePreferencesService: ObservableObject {
     }
 
     public func text(for rating: Int) -> String { level(for: rating).rawValue }
-    public func color(for rating: Int) -> String { level(for: rating).hex }
 }

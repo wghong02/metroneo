@@ -134,8 +134,9 @@ under `@performance_cutoffs`.
 - `cutoffs`, `setCutoffs(c)`, `resetToDefaults()`.
 - `text(for:)` → `Excellent | Very Good | Good | Fair | Poor`
   (Poor is anything below `fair`).
-- `color(for:)` → hex: Excellent `#2E7D32`, Very Good `#4CAF50`, Good `#2196F3`,
-  Fair `#FF9800`, Poor `#F44336`.
+- The matching fill `Color` for a rating/level is defined in `Palette.swift`
+  (`color(for:)` / `PerformanceLevel.color`) — green → blue → orange → red.
+  Surfaces use adaptive system colors, so the UI is correct in dark mode.
 
 ---
 
@@ -264,7 +265,8 @@ tasks + events before showing the tabs.
   `@Model` types in `StoredModels`. No persistence protocol.
 - **Services** (`Metroneo/Services`) — `TaskService`, `EventService`,
   `PerformancePreferencesService`, and `PerformanceAnalytics` (pure calculations).
-- **Utilities** (`Metroneo/Utilities`) — `DateTimeUtilities`, `Color(hex:)`.
+- **Utilities** (`Metroneo/Utilities`) — `DateTimeUtilities` and `Palette`
+  (performance colors + the shared `cardStyle()` surface).
 - **Views** (`Metroneo/Views` + `Metroneo/App`) — `RootView`, `CalendarView`,
   `TaskListView`, `PerformanceView`, `SettingsView` + sub-screens, and the
   task/event/rating sheets, using the native graphical calendar and Swift Charts.
