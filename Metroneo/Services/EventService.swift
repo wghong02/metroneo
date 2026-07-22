@@ -30,7 +30,7 @@ public final class EventService: ObservableObject {
             try db.saveEvent(e)
             eventsByDate[day, default: []].append(e)
         } catch {
-            print("[EventService] Error adding event:", error)
+            Log.eventError("Failed to add event: \(error)")
         }
     }
 
@@ -41,7 +41,7 @@ public final class EventService: ObservableObject {
             try db.saveEvent(e)
             eventsByDate[day] = (eventsByDate[day] ?? []).map { $0.id == e.id ? e : $0 }
         } catch {
-            print("[EventService] Error updating event:", error)
+            Log.eventError("Failed to update event: \(error)")
         }
     }
 
@@ -52,7 +52,7 @@ public final class EventService: ObservableObject {
             let list = (eventsByDate[day] ?? []).filter { $0.id != id }
             if list.isEmpty { eventsByDate.removeValue(forKey: day) } else { eventsByDate[day] = list }
         } catch {
-            print("[EventService] Error deleting event:", error)
+            Log.eventError("Failed to delete event: \(error)")
         }
     }
 

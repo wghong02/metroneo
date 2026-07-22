@@ -15,8 +15,8 @@ public struct PerformanceCutoffs: Codable, Equatable {
         self.excellent = excellent
     }
 
-    /// Service default (note: distinct from the Cutoffs *screen's* input seed of
-    /// 25/50/75/100).
+    /// The single source of truth for default cutoffs. The Cutoffs screen seeds
+    /// its fields from the current cutoffs, which start from these.
     public static let defaults = PerformanceCutoffs(fair: 60, good: 75, veryGood: 80, excellent: 90)
 }
 

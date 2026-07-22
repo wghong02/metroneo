@@ -17,7 +17,7 @@ public enum PerformancePeriod: String, CaseIterable {
 }
 
 /// Trend of a data point relative to the previous one.
-public enum PerformanceTrend { case up, down, stable }
+public enum PerformanceTrend: Equatable { case up, down, stable }
 
 /// One point in a weekly/monthly performance series.
 public struct PerformanceDataPoint: Equatable {
@@ -31,10 +31,6 @@ public struct PerformanceDataPoint: Equatable {
         self.average = average
         self.taskCount = taskCount
         self.trend = trend
-    }
-
-    public static func == (l: PerformanceDataPoint, r: PerformanceDataPoint) -> Bool {
-        l.period == r.period && l.average == r.average && l.taskCount == r.taskCount
     }
 }
 

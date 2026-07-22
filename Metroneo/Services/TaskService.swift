@@ -35,7 +35,7 @@ public final class TaskService: ObservableObject {
             tasks = (try? db.loadTasks()) ?? tasks
             hasUnsavedChanges = false
         } catch {
-            print("[TaskService] Error saving tasks:", error)
+            Log.taskError("Failed to save tasks: \(error)")
         }
     }
 
