@@ -15,6 +15,11 @@ public enum DateTimeUtilities {
     /// Local start-of-day for a date.
     public static func startOfDay(_ date: Date) -> Date { gregorian.startOfDay(for: date) }
 
+    /// Today at the given time-of-day — a default seed for time pickers.
+    public static func time(hour: Int, minute: Int) -> Date {
+        gregorian.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) ?? Date()
+    }
+
     /// End-of-day (`23:59:59`) for a day. This is the deadline sentinel used when
     /// no explicit time is set.
     public static func endOfDay(_ day: Date) -> Date {

@@ -18,8 +18,8 @@ struct EventEditorSheet: View {
         self.onSave = onSave
         _title = State(initialValue: event?.title ?? "New Event")
         _allDay = State(initialValue: event?.allDay ?? false)
-        _startTime = State(initialValue: event?.startTime ?? Self.defaultTime(8))
-        _endTime = State(initialValue: event?.endTime ?? Self.defaultTime(9))
+        _startTime = State(initialValue: event?.startTime ?? DateTimeUtilities.time(hour: 8, minute: 0))
+        _endTime = State(initialValue: event?.endTime ?? DateTimeUtilities.time(hour: 9, minute: 0))
         _notes = State(initialValue: event?.notes ?? "")
     }
 
@@ -67,11 +67,5 @@ struct EventEditorSheet: View {
         )
         onSave(event)
         dismiss()
-    }
-
-    // MARK: - Time helpers
-
-    private static func defaultTime(_ hour: Int) -> Date {
-        Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
     }
 }

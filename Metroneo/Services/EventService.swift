@@ -56,22 +56,6 @@ public final class EventService: ObservableObject {
         }
     }
 
-    /// Re-dates an event and moves it between day buckets.
-    public func moveEvent(oldDate: Date, newDate: Date, id: String) {
-        let oldDay = DateTimeUtilities.startOfDay(oldDate)
-        guard let existing = (eventsByDate[oldDay] ?? []).first(where: { $0.id == id }) else { return }
-        let newDay = DateTimeUtilities.startOfDay(newDate)
-        let event = anchor(existing, to: newDay)
-        do {
-            try db.saveEvent(event)
-            let oldList = (eventsByDate[oldDay] ?? []).filter { $0.id != id }
-            if oldList.isEmpty { eventsByDate.removeValue(forKey: oldDay) } else { eventsByDate[oldDay] = oldList }
-            eventsByDate[newDay, default: []].append(event)
-        } catch {
-            print("[EventService] Error moving event:", error)
-        }
-    }
-
     /// Pins an event to `day`: sets its date and re-anchors any start/end time to
     /// that day (times are stored as instants but only their time-of-day matters).
     private func anchor(_ event: Event, to day: Date) -> Event {

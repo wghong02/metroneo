@@ -6,7 +6,6 @@ public struct DatabaseStats: Equatable {
     public var taskCount: Int
     public var subTaskCount: Int
     public var eventCount: Int
-    public var settingCount: Int
     public var schemaVersion: Int
     public var isClosed: Bool
 }
@@ -56,7 +55,6 @@ public final class SwiftDataDatabase {
             taskCount: count(StoredTask.self),
             subTaskCount: count(StoredSubTask.self),
             eventCount: count(StoredEvent.self),
-            settingCount: 0,
             schemaVersion: 1,
             isClosed: false
         )
@@ -146,20 +144,6 @@ public final class SwiftDataDatabase {
             context.delete(row)
             try context.save()
         }
-    }
-
-    public func event(id: String) throws -> Event? {
-        try eventRow(id: id).map(event(from:))
-    }
-
-    public func events(forDate date: Date) throws -> [Event] {
-        let start = DateTimeUtilities.startOfDay(date)
-        let end = start.addingTimeInterval(86_400)
-        let descriptor = FetchDescriptor<StoredEvent>(
-            predicate: #Predicate<StoredEvent> { $0.date >= start && $0.date < end },
-            sortBy: [SortDescriptor(\.startTime), SortDescriptor(\.title)]
-        )
-        return try context.fetch(descriptor).map(event(from:))
     }
 
     // MARK: - Row mapping

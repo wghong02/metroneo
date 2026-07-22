@@ -64,10 +64,6 @@ public final class TaskService: ObservableObject {
 
     public func uncompleteTask(id: String) { mutate(id) { $0.completedAt = nil } }
 
-    public func updateTaskPriority(id: String, priority: Int) {
-        mutate(id) { $0.priorityRating = priority }
-    }
-
     /// Sets performance rating (+ optional notes). Used for both completing and
     /// editing an already-completed task's rating.
     public func updateTaskPerformance(id: String, performance: Int, notes: String? = nil) {

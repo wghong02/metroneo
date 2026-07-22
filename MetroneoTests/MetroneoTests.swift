@@ -62,9 +62,9 @@ final class SwiftDataDatabaseTests: XCTestCase {
         let db = try makeDB()
         try db.saveEvent(Event(id: "e1", date: day("2026-07-21"), title: "Meeting"))
         try db.saveEvent(Event(id: "e1", date: day("2026-07-21"), title: "Renamed"))
-        XCTAssertEqual(try db.events(forDate: day("2026-07-21")).map(\.title), ["Renamed"])  // upsert, not dup
+        XCTAssertEqual(try db.loadEvents().map(\.title), ["Renamed"])  // upsert, not dup
         try db.deleteEvent(id: "e1")
-        XCTAssertTrue(try db.events(forDate: day("2026-07-21")).isEmpty)
+        XCTAssertTrue(try db.loadEvents().isEmpty)
     }
 }
 

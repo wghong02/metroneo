@@ -37,7 +37,7 @@ struct TaskEditorSheet: View {
         _deadlineDate = State(initialValue: deadline ?? Date())
         let hasTime = deadline.map(DateTimeUtilities.hasExplicitTime) ?? false
         _useDeadlineTime = State(initialValue: hasTime)
-        _deadlineTime = State(initialValue: hasTime ? (deadline ?? Date()) : Self.time(23, 59))
+        _deadlineTime = State(initialValue: hasTime ? (deadline ?? Date()) : DateTimeUtilities.time(hour: 23, minute: 59))
         _recurring = State(initialValue: task?.recurring ?? false)
         _frequencyPattern = State(initialValue: task?.frequencyPattern ?? .none)
         _frequencyCount = State(initialValue: task?.frequencyCount ?? 1)
@@ -190,12 +190,5 @@ struct TaskEditorSheet: View {
         )
         onSave(task)
         dismiss()
-    }
-
-    // MARK: - Time helpers
-
-    /// A `Date` today at the given hour/minute — the default deadline time.
-    private static func time(_ h: Int, _ m: Int) -> Date {
-        Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? Date()
     }
 }

@@ -88,8 +88,8 @@ Operations:
   `order` is set from position. `loadTasks()` returns tasks ordered by `createDate`
   descending, each with its subtasks ordered by `order`.
 - **Events** — `saveEvent(event)` upserts a single event (by unique `eventID`);
-  `deleteEvent(id)`, `event(id:)`, `events(forDate:)` (same-day range), and
-  `loadEvents()` (ordered by date, then start time, then title). `title` is required.
+  `deleteEvent(id)` and `loadEvents()` (ordered by date, then start time, then
+  title). `title` is required.
 - **Admin** — `reset()` (clears all data) and `stats()` (row counts + state).
   Constructing the store `throws MetroneoError.database` if it fails to open; the
   app treats that as fatal (§10).
@@ -114,7 +114,6 @@ ids are stable, a captured id stays valid across any number of edits and saves.
 - `deleteTask(id)` — removes by id.
 - `completeTask(id)` — sets `completedAt` to the current instant.
 - `uncompleteTask(id)` — clears `completedAt` (`nil`).
-- `updateTaskPriority(id, priority)`.
 - `updateTaskPerformance(id, performance, notes?)` — sets `performanceRating`
   (and `performanceNotes`).
 - `toggleSubTask(taskId, subTaskId)` — flips a subtask's `completedAt` (now ↔ nil).
@@ -126,8 +125,6 @@ event edits **persist immediately**.
 - `addEvent(date, event)` / `updateEvent(date, event)` — normalize the event to that
   day and re-anchor its start/end times to it, upsert, update cache.
 - `deleteEvent(date, id)` — delete + cache prune (drops the day key when empty).
-- `moveEvent(oldDate, newDate, id)` — re-dates an event and moves it between
-  cache buckets.
 - `events(on: date)` — cached lookup by start-of-day.
 
 ### 4.3 PerformancePreferencesService
