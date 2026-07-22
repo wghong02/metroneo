@@ -6,8 +6,6 @@ import Foundation
 public final class InMemoryDatabase: TaskDatabase {
     private var tasks: [Task] = []
     private var events: [String: Event] = [:]
-    private var nextTaskID = 1
-    private var nextSubTaskID = 1
 
     public init() {}
 
@@ -16,8 +14,6 @@ public final class InMemoryDatabase: TaskDatabase {
     public func reset() throws {
         tasks = []
         events = [:]
-        nextTaskID = 1
-        nextSubTaskID = 1
     }
 
     public func stats() -> DatabaseStats {
@@ -39,14 +35,16 @@ public final class InMemoryDatabase: TaskDatabase {
     }
 
     public func saveTasks(_ newTasks: [Task]) throws {
+        // Full replace, preserving each task's existing id (a fresh one is minted
+        // only when missing) so references stay stable across saves.
         var stored: [Task] = []
         for var task in newTasks {
-            let taskID = String(nextTaskID); nextTaskID += 1
+            let taskID = task.id ?? UUID().uuidString
             task.id = taskID
             task.title = task.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New Task" : task.title
             task.subTasks = task.subTasks.enumerated().map { index, sub in
                 var s = sub
-                s.id = String(nextSubTaskID); nextSubTaskID += 1
+                s.id = sub.id ?? UUID().uuidString
                 s.parentTaskId = taskID
                 s.order = index
                 if s.title.trimmingCharacters(in: .whitespaces).isEmpty { s.title = "New Subtask" }

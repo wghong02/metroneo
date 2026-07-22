@@ -37,8 +37,13 @@ struct PerformanceView: View {
                 .padding()
             }
             .navigationTitle("Performance")
-            .refreshable {
-                tasks.loadTasks()
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { tasks.save() } label: {
+                        Label("Save", systemImage: "checkmark")
+                    }
+                    .disabled(!tasks.hasUnsavedChanges)
+                }
             }
             .sheet(item: $ratingTarget) { task in
                 PerformanceRatingSheet(task: task) { rating, notes in

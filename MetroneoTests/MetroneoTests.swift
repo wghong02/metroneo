@@ -70,15 +70,50 @@ final class InMemoryDatabaseTests: XCTestCase {
 final class TaskServiceTests: XCTestCase {
     private func makeService() -> TaskService { TaskService(db: InMemoryDatabase()) }
 
-    func testAddAndComplete() {
+    private func sampleTask(_ title: String = "Write") -> Task {
+        Task(title: title, deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20"))
+    }
+
+    func testMutationsAreInMemoryUntilSave() {
         let s = makeService()
-        s.addTask(Task(title: "Write", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20")))
-        XCTAssertEqual(s.tasks.count, 1)
+        s.addTask(sampleTask())
+        XCTAssertTrue(s.hasUnsavedChanges)
         let id = s.tasks[0].id!
+
+        // Two edits against the same captured id — must both land on one task.
         s.updateTaskPerformance(id: id, performance: 85, notes: "good")
         s.completeTask(id: id)
         XCTAssertTrue(s.tasks[0].isCompleted)
         XCTAssertEqual(s.tasks[0].performanceRating, 85)
+
+        s.save()
+        XCTAssertFalse(s.hasUnsavedChanges)
+    }
+
+    func testIDsStableAcrossSaves() {
+        let s = makeService()
+        s.addTask(sampleTask())
+        let id = s.tasks[0].id!
+
+        s.save()
+        XCTAssertEqual(s.tasks[0].id, id, "id must survive a save")
+
+        s.completeTask(id: id)
+        s.save()
+        XCTAssertEqual(s.tasks[0].id, id, "id must survive further saves")
+        XCTAssertTrue(s.tasks[0].isCompleted)
+    }
+
+    func testDiscardRestoresPersistedState() {
+        let s = makeService()
+        s.addTask(sampleTask())
+        s.save()
+        s.deleteTask(id: s.tasks[0].id!)
+        XCTAssertTrue(s.tasks.isEmpty)
+
+        s.discardChanges()
+        XCTAssertEqual(s.tasks.count, 1)
+        XCTAssertFalse(s.hasUnsavedChanges)
     }
 
     func testBlankTitleDefaults() {

@@ -66,12 +66,12 @@ public final class CoreDataDatabase: TaskDatabase {
     }
 
     public func saveTasks(_ tasks: [Task]) throws {
-        // Replace the whole set (delete-all + re-insert), matching the RN layer.
+        // Replace the whole set (delete-all + re-insert), preserving each task's
+        // existing id so references stay stable across saves.
         try reset()
-        var seq = 1
         for task in tasks {
             let row = NSEntityDescription.insertNewObject(forEntityName: "CDTask", into: context)
-            let taskID = String(seq); seq += 1
+            let taskID = task.id ?? UUID().uuidString
             row.setValue(taskID, forKey: "taskID")
             row.setValue(task.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New Task" : task.title, forKey: "title")
             row.setValue(task.notes, forKey: "notes")
@@ -91,7 +91,7 @@ public final class CoreDataDatabase: TaskDatabase {
             var subRows = Set<NSManagedObject>()
             for (index, sub) in task.subTasks.enumerated() {
                 let subRow = NSEntityDescription.insertNewObject(forEntityName: "CDSubTask", into: context)
-                subRow.setValue(String(seq), forKey: "subTaskID"); seq += 1
+                subRow.setValue(sub.id ?? UUID().uuidString, forKey: "subTaskID")
                 subRow.setValue(sub.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New Subtask" : sub.title, forKey: "title")
                 subRow.setValue(sub.notes, forKey: "notes")
                 subRow.setValue(sub.deadline, forKey: "deadline")
