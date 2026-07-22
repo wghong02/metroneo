@@ -41,9 +41,6 @@ public final class InMemoryDatabase: TaskDatabase {
     public func saveTasks(_ newTasks: [Task]) throws {
         var stored: [Task] = []
         for var task in newTasks {
-            guard !task.createDate.isEmpty else {
-                throw MetroneoError.validation("Task missing required field: createDate")
-            }
             let taskID = String(nextTaskID); nextTaskID += 1
             task.id = taskID
             task.title = task.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New Task" : task.title
@@ -65,14 +62,15 @@ public final class InMemoryDatabase: TaskDatabase {
     public func loadEvents() throws -> [Event] {
         events.values.sorted {
             if $0.date != $1.date { return $0.date < $1.date }
-            if ($0.startTime ?? "") != ($1.startTime ?? "") { return ($0.startTime ?? "") < ($1.startTime ?? "") }
+            let s0 = $0.startTime ?? .distantPast, s1 = $1.startTime ?? .distantPast
+            if s0 != s1 { return s0 < s1 }
             return $0.title < $1.title
         }
     }
 
     public func saveEvent(_ event: Event) throws {
-        guard !event.title.isEmpty, !event.date.isEmpty else {
-            throw MetroneoError.validation("Event title and date are required")
+        guard !event.title.isEmpty else {
+            throw MetroneoError.validation("Event title is required")
         }
         events[event.id] = event
     }
@@ -81,8 +79,9 @@ public final class InMemoryDatabase: TaskDatabase {
 
     public func event(id: String) throws -> Event? { events[id] }
 
-    public func events(forDate date: String) throws -> [Event] {
-        try loadEvents().filter { $0.date == date }
+    public func events(forDate date: Date) throws -> [Event] {
+        let calendar = Calendar.current
+        return try loadEvents().filter { calendar.isDate($0.date, inSameDayAs: date) }
     }
 }
 

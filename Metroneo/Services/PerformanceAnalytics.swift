@@ -50,7 +50,7 @@ public enum PerformanceAnalytics {
     /// Start/end range for a period. `now` and `customStart` are injectable for tests.
     public static func dateRange(
         for period: PerformancePeriod,
-        customStart: String? = nil,
+        customStart: Date? = nil,
         now: Date = Date()
     ) -> (start: Date, end: Date) {
         let cal = calendar
@@ -62,12 +62,7 @@ public enum PerformanceAnalytics {
         case .threeMonths: start = cal.date(byAdding: .month, value: -3, to: now) ?? now
         case .year:        start = cal.date(byAdding: .year, value: -1, to: now) ?? now
         case .allTime:     start = Date(timeIntervalSince1970: 0)
-        case .custom:
-            if let customStart, let d = DateTimeUtilities.date(fromKey: customStart) {
-                start = d
-            } else {
-                start = cal.date(byAdding: .day, value: -7, to: now) ?? now
-            }
+        case .custom:      start = customStart ?? (cal.date(byAdding: .day, value: -7, to: now) ?? now)
         }
         return (start, end)
     }
@@ -76,13 +71,12 @@ public enum PerformanceAnalytics {
     public static func filteredTasks(
         _ tasks: [Task],
         period: PerformancePeriod,
-        customStart: String? = nil,
+        customStart: Date? = nil,
         now: Date = Date()
     ) -> [Task] {
         let range = dateRange(for: period, customStart: customStart, now: now)
         return tasks.filter { task in
-            guard task.completedAt != kNotCompleted,
-                  let d = DateTimeUtilities.date(fromKey: task.completedAt) else { return false }
+            guard let d = task.completedAt else { return false }
             return d >= range.start && d <= range.end
         }
     }
@@ -103,8 +97,7 @@ public enum PerformanceAnalytics {
             let weekStart = cal.date(byAdding: .day, value: -6, to: weekEnd) ?? weekEnd
             let monday = mondayOfWeek(containing: weekStart, cal: cal)
             let weekTasks = tasks.filter { task in
-                guard task.completedAt != kNotCompleted,
-                      let d = DateTimeUtilities.date(fromKey: task.completedAt) else { return false }
+                guard let d = task.completedAt else { return false }
                 return d >= weekStart && d <= weekEnd
             }
             points.append(PerformanceDataPoint(
@@ -127,8 +120,7 @@ public enum PerformanceAnalytics {
             comps.day = 1
             let monthStart = cal.date(from: comps) ?? monthEnd
             let monthTasks = tasks.filter { task in
-                guard task.completedAt != kNotCompleted,
-                      let d = DateTimeUtilities.date(fromKey: task.completedAt) else { return false }
+                guard let d = task.completedAt else { return false }
                 return d >= monthStart && d <= monthEnd
             }
             points.append(PerformanceDataPoint(

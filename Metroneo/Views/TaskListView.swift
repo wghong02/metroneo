@@ -21,11 +21,11 @@ struct TaskListView: View {
 
     private var upcoming: [Task] {
         tasks.tasks.filter { !$0.isCompleted }
-            .sorted { deadlineDate($0) < deadlineDate($1) }
+            .sorted { $0.deadline < $1.deadline }
     }
     private var completed: [Task] {
         tasks.tasks.filter { $0.isCompleted }
-            .sorted { $0.completedAt > $1.completedAt }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
     }
     private var current: [Task] { showCompleted ? completed : upcoming }
 
@@ -112,10 +112,6 @@ struct TaskListView: View {
             }
         }
     }
-
-    private func deadlineDate(_ task: Task) -> String {
-        task.deadline.split(separator: "T").first.map(String.init) ?? task.deadline
-    }
 }
 
 /// A task card showing checkbox, title, ratings, meta, and subtask preview.
@@ -155,7 +151,7 @@ private struct TaskCard: View {
                 Text(notes).font(.caption).italic().foregroundStyle(.secondary)
             }
 
-            Text("Created: \(DateTimeUtilities.localizedDate(fromKey: task.createDate)) | Deadline: \(DateTimeUtilities.formatDeadline(task.deadline))")
+            Text("Created: \(DateTimeUtilities.shortDate(task.createDate)) | Deadline: \(DateTimeUtilities.formatDeadline(task.deadline))")
                 .font(.caption2).foregroundStyle(.secondary)
 
             if let types = task.types, !types.isEmpty {
@@ -191,8 +187,8 @@ private struct TaskCard: View {
                 }
             }
 
-            if task.isCompleted {
-                Text("Completed: \(DateTimeUtilities.localizedDate(fromKey: task.completedAt))")
+            if let completedAt = task.completedAt {
+                Text("Completed: \(DateTimeUtilities.shortDate(completedAt))")
                     .font(.caption2).italic().foregroundStyle(.secondary)
                 if let pnotes = task.performanceNotes, !pnotes.isEmpty {
                     Text("Performance Notes: \(pnotes)").font(.caption2).italic().foregroundStyle(.secondary)

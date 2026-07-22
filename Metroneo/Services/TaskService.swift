@@ -48,14 +48,14 @@ public final class TaskService: ObservableObject {
     public func completeTask(id: String) {
         saveTasks(tasks.map { task in
             guard task.id == id else { return task }
-            var t = task; t.completedAt = DateTimeUtilities.todayKey(); return t
+            var t = task; t.completedAt = Date(); return t
         })
     }
 
     public func uncompleteTask(id: String) {
         saveTasks(tasks.map { task in
             guard task.id == id else { return task }
-            var t = task; t.completedAt = kNotCompleted; return t
+            var t = task; t.completedAt = nil; return t
         })
     }
 
@@ -83,7 +83,7 @@ public final class TaskService: ObservableObject {
             t.subTasks = task.subTasks.map { sub in
                 guard sub.id == subTaskId else { return sub }
                 var s = sub
-                s.completedAt = sub.isCompleted ? kNotCompleted : DateTimeUtilities.todayKey()
+                s.completedAt = sub.isCompleted ? nil : Date()
                 return s
             }
             return t

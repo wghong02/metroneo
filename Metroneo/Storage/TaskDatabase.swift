@@ -30,5 +30,5 @@ public protocol TaskDatabase: AnyObject {
     func saveEvent(_ event: Event) throws
     func deleteEvent(id: String) throws
     func event(id: String) throws -> Event?
-    func events(forDate date: String) throws -> [Event]
+    func events(forDate date: Date) throws -> [Event]
 }

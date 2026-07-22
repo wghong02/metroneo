@@ -1,8 +1,5 @@
 import Foundation
 
-/// Sentinel stored in `completedAt` when a task/subtask is not complete.
-public let kNotCompleted = "na"
-
 /// How often a recurring task repeats (FUNCTIONALITY.md §2.2).
 public enum FrequencyPattern: String, Codable, CaseIterable, Sendable {
     case daily, weekly, monthly, yearly, custom, none
@@ -13,10 +10,11 @@ public struct SubTask: Codable, Identifiable, Equatable, Hashable {
     public var id: String?
     public var title: String
     public var notes: String?
-    public var deadline: String
+    public var deadline: Date
     public var priorityRating: Int
     public var performanceRating: Int
-    public var completedAt: String
+    /// Completion instant, or `nil` when not complete.
+    public var completedAt: Date?
     public var parentTaskId: String?
     public var order: Int
 
@@ -24,10 +22,10 @@ public struct SubTask: Codable, Identifiable, Equatable, Hashable {
         id: String? = nil,
         title: String,
         notes: String? = nil,
-        deadline: String = "",
+        deadline: Date = Date(),
         priorityRating: Int = 0,
         performanceRating: Int = 0,
-        completedAt: String = kNotCompleted,
+        completedAt: Date? = nil,
         parentTaskId: String? = nil,
         order: Int = 0
     ) {
@@ -42,7 +40,7 @@ public struct SubTask: Codable, Identifiable, Equatable, Hashable {
         self.order = order
     }
 
-    public var isCompleted: Bool { completedAt != kNotCompleted }
+    public var isCompleted: Bool { completedAt != nil }
 }
 
 /// The core productivity model (FUNCTIONALITY.md §2.2).
@@ -50,16 +48,16 @@ public struct Task: Codable, Identifiable, Equatable, Hashable {
     public var id: String?
     public var title: String
     public var notes: String?
-    /// `"YYYY-MM-DDTHH:mm:ss"`. Defaults to `T23:59:59` when no time is given.
-    public var deadline: String
+    /// Full deadline instant. A time of `23:59:59` marks an end-of-day deadline
+    /// with no explicit time (see ``DateTimeUtilities/hasExplicitTime(_:)``).
+    public var deadline: Date
     /// 0–100, default 50.
     public var priorityRating: Int
     /// 0–100, default 50.
     public var performanceRating: Int
-    /// `"YYYY-MM-DD"` when complete, else ``kNotCompleted``.
-    public var completedAt: String
-    /// `"YYYY-MM-DD"` (local). Required.
-    public var createDate: String
+    /// Completion instant, or `nil` when not complete.
+    public var completedAt: Date?
+    public var createDate: Date
     public var frequencyPattern: FrequencyPattern
     public var frequencyCount: Int
     public var recurring: Bool
@@ -73,11 +71,11 @@ public struct Task: Codable, Identifiable, Equatable, Hashable {
         id: String? = nil,
         title: String,
         notes: String? = nil,
-        deadline: String,
+        deadline: Date,
         priorityRating: Int = 50,
         performanceRating: Int = 50,
-        completedAt: String = kNotCompleted,
-        createDate: String,
+        completedAt: Date? = nil,
+        createDate: Date = Date(),
         frequencyPattern: FrequencyPattern = .none,
         frequencyCount: Int = 0,
         recurring: Bool = false,
@@ -105,12 +103,5 @@ public struct Task: Codable, Identifiable, Equatable, Hashable {
         self.subTasks = subTasks
     }
 
-    public var isCompleted: Bool { completedAt != kNotCompleted }
-
-    /// Composes a deadline string from a date key and optional `"HH:mm"` time,
-    /// defaulting to end-of-day (`T23:59:59`) when no time is given.
-    public static func composeDeadline(date: String, time: String?) -> String {
-        if let time, !time.isEmpty { return "\(date)T\(time):00" }
-        return "\(date)T23:59:59"
-    }
+    public var isCompleted: Bool { completedAt != nil }
 }

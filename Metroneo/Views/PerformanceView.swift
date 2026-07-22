@@ -8,7 +8,7 @@ struct PerformanceView: View {
     @EnvironmentObject private var preferences: PerformancePreferencesService
 
     @State private var period: PerformancePeriod = .week
-    @State private var customStart = ""
+    @State private var customStart = Date()
     @State private var ratingTarget: Task?
 
     private var filtered: [Task] {
@@ -60,9 +60,7 @@ struct PerformanceView: View {
             }
             .pickerStyle(.segmented)
             if period == .custom {
-                TextField("Start date (YYYY-MM-DD)", text: $customStart)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
+                DatePicker("Start date", selection: $customStart, in: ...Date(), displayedComponents: .date)
             }
         }
     }
@@ -152,7 +150,7 @@ struct PerformanceView: View {
                     .foregroundStyle(.white)
             }
             HStack {
-                Text("Completed: \(DateTimeUtilities.localizedDate(fromKey: task.completedAt))")
+                Text("Completed: \(task.completedAt.map { DateTimeUtilities.shortDate($0) } ?? "—")")
                     .font(.caption2).foregroundStyle(.secondary)
                 Spacer()
                 Text("Rating: \(task.performanceRating)/100").font(.caption2).foregroundStyle(.blue)

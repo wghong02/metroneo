@@ -32,13 +32,12 @@ struct TaskEditorSheet: View {
         _notes = State(initialValue: task?.notes ?? "")
         _priority = State(initialValue: Double(task?.priorityRating ?? 50))
         _performance = State(initialValue: Double(task?.performanceRating ?? 50))
-        _createDate = State(initialValue: DateTimeUtilities.date(fromKey: task?.createDate ?? "") ?? Date())
-        let deadlineKey = task?.deadline.split(separator: "T").first.map(String.init)
-        _deadlineDate = State(initialValue: DateTimeUtilities.date(fromKey: deadlineKey ?? "") ?? Date())
-        let timePart = task?.deadline.split(separator: "T").dropFirst().first.map(String.init)
-        let hasTime = timePart != nil && timePart != "23:59:59"
+        _createDate = State(initialValue: task?.createDate ?? Date())
+        let deadline = task?.deadline
+        _deadlineDate = State(initialValue: deadline ?? Date())
+        let hasTime = deadline.map(DateTimeUtilities.hasExplicitTime) ?? false
         _useDeadlineTime = State(initialValue: hasTime)
-        _deadlineTime = State(initialValue: Self.parseTime(timePart) ?? Self.time(23, 59))
+        _deadlineTime = State(initialValue: hasTime ? (deadline ?? Date()) : Self.time(23, 59))
         _recurring = State(initialValue: task?.recurring ?? false)
         _frequencyPattern = State(initialValue: task?.frequencyPattern ?? .none)
         _frequencyCount = State(initialValue: task?.frequencyCount ?? 1)
@@ -155,7 +154,7 @@ struct TaskEditorSheet: View {
         subTasks.append(SubTask(
             title: trimmed,
             notes: newSubTaskNotes.isEmpty ? nil : newSubTaskNotes,
-            deadline: DateTimeUtilities.dateKey(for: deadlineDate),
+            deadline: DateTimeUtilities.endOfDay(deadlineDate),
             priorityRating: 50,
             performanceRating: 50,
             order: subTasks.count
@@ -166,10 +165,9 @@ struct TaskEditorSheet: View {
 
     private func save() {
         let safeTitle = title.trimmingCharacters(in: .whitespaces).isEmpty ? "New Task" : title
-        let deadline = Task.composeDeadline(
-            date: DateTimeUtilities.dateKey(for: deadlineDate),
-            time: useDeadlineTime ? Self.hhmm(deadlineTime) : nil
-        )
+        let deadline = useDeadlineTime
+            ? DateTimeUtilities.combine(day: deadlineDate, time: deadlineTime)
+            : DateTimeUtilities.endOfDay(deadlineDate)
         let task = Task(
             id: existing?.id,
             title: safeTitle,
@@ -177,8 +175,8 @@ struct TaskEditorSheet: View {
             deadline: deadline,
             priorityRating: Int(priority),
             performanceRating: Int(performance),
-            completedAt: existing?.completedAt ?? kNotCompleted,
-            createDate: DateTimeUtilities.dateKey(for: createDate),
+            completedAt: existing?.completedAt,
+            createDate: createDate,
             frequencyPattern: recurring ? frequencyPattern : .none,
             frequencyCount: frequencyCount,
             recurring: recurring,
@@ -196,17 +194,8 @@ struct TaskEditorSheet: View {
 
     // MARK: - Time helpers
 
-    private static func parseTime(_ hhmmss: String?) -> Date? {
-        guard let hhmmss else { return nil }
-        let parts = hhmmss.split(separator: ":").compactMap { Int($0) }
-        guard parts.count >= 2 else { return nil }
-        return time(parts[0], parts[1])
-    }
+    /// A `Date` today at the given hour/minute — the default deadline time.
     private static func time(_ h: Int, _ m: Int) -> Date {
         Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? Date()
-    }
-    private static func hhmm(_ date: Date) -> String {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 }

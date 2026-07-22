@@ -70,9 +70,6 @@ public final class CoreDataDatabase: TaskDatabase {
         try reset()
         var seq = 1
         for task in tasks {
-            guard !task.createDate.isEmpty else {
-                throw MetroneoError.validation("Task missing required field: createDate")
-            }
             let row = NSEntityDescription.insertNewObject(forEntityName: "CDTask", into: context)
             let taskID = String(seq); seq += 1
             row.setValue(taskID, forKey: "taskID")
@@ -123,8 +120,8 @@ public final class CoreDataDatabase: TaskDatabase {
     }
 
     public func saveEvent(_ event: Event) throws {
-        guard !event.title.isEmpty, !event.date.isEmpty else {
-            throw MetroneoError.validation("Event title and date are required")
+        guard !event.title.isEmpty else {
+            throw MetroneoError.validation("Event title is required")
         }
         let row = try fetchEventRow(id: event.id) ?? NSEntityDescription.insertNewObject(forEntityName: "CDEvent", into: context)
         row.setValue(event.id, forKey: "eventID")
@@ -148,9 +145,12 @@ public final class CoreDataDatabase: TaskDatabase {
         try fetchEventRow(id: id).map(event(from:))
     }
 
-    public func events(forDate date: String) throws -> [Event] {
+    public func events(forDate date: Date) throws -> [Event] {
+        let start = DateTimeUtilities.startOfDay(date)
         let request = NSFetchRequest<NSManagedObject>(entityName: "CDEvent")
-        request.predicate = NSPredicate(format: "date == %@", date)
+        request.predicate = NSPredicate(format: "date >= %@ AND date < %@",
+                                        start as NSDate,
+                                        start.addingTimeInterval(86_400) as NSDate)
         request.sortDescriptors = [
             NSSortDescriptor(key: "startTime", ascending: true),
             NSSortDescriptor(key: "title", ascending: true)
@@ -180,11 +180,11 @@ public final class CoreDataDatabase: TaskDatabase {
             id: row.value(forKey: "taskID") as? String,
             title: row.value(forKey: "title") as? String ?? "Untitled Task",
             notes: row.value(forKey: "notes") as? String,
-            deadline: row.value(forKey: "deadline") as? String ?? "",
+            deadline: row.value(forKey: "deadline") as? Date ?? Date(),
             priorityRating: Int(row.value(forKey: "priorityRating") as? Int32 ?? 0),
             performanceRating: Int(row.value(forKey: "performanceRating") as? Int32 ?? 0),
-            completedAt: row.value(forKey: "completedAt") as? String ?? kNotCompleted,
-            createDate: row.value(forKey: "createDate") as? String ?? DateTimeUtilities.todayKey(),
+            completedAt: row.value(forKey: "completedAt") as? Date,
+            createDate: row.value(forKey: "createDate") as? Date ?? Date(),
             frequencyPattern: FrequencyPattern(rawValue: row.value(forKey: "frequencyPattern") as? String ?? "none") ?? .none,
             frequencyCount: Int(row.value(forKey: "frequencyCount") as? Int32 ?? 0),
             recurring: row.value(forKey: "recurring") as? Bool ?? false,
@@ -201,10 +201,10 @@ public final class CoreDataDatabase: TaskDatabase {
             id: row.value(forKey: "subTaskID") as? String,
             title: row.value(forKey: "title") as? String ?? "Untitled Subtask",
             notes: row.value(forKey: "notes") as? String,
-            deadline: row.value(forKey: "deadline") as? String ?? "",
+            deadline: row.value(forKey: "deadline") as? Date ?? Date(),
             priorityRating: Int(row.value(forKey: "priorityRating") as? Int32 ?? 0),
             performanceRating: Int(row.value(forKey: "performanceRating") as? Int32 ?? 0),
-            completedAt: row.value(forKey: "completedAt") as? String ?? kNotCompleted,
+            completedAt: row.value(forKey: "completedAt") as? Date,
             parentTaskId: (row.value(forKey: "parentTask") as? NSManagedObject)?.value(forKey: "taskID") as? String,
             order: Int(row.value(forKey: "orderIndex") as? Int32 ?? 0)
         )
@@ -213,12 +213,12 @@ public final class CoreDataDatabase: TaskDatabase {
     private func event(from row: NSManagedObject) -> Event {
         Event(
             id: row.value(forKey: "eventID") as? String ?? Event.makeID(),
-            date: row.value(forKey: "date") as? String ?? DateTimeUtilities.todayKey(),
+            date: row.value(forKey: "date") as? Date ?? Date(),
             title: row.value(forKey: "title") as? String ?? "Untitled Event",
             notes: row.value(forKey: "notes") as? String,
             allDay: row.value(forKey: "allDay") as? Bool ?? false,
-            startTime: row.value(forKey: "startTime") as? String,
-            endTime: row.value(forKey: "endTime") as? String
+            startTime: row.value(forKey: "startTime") as? Date,
+            endTime: row.value(forKey: "endTime") as? Date
         )
     }
 

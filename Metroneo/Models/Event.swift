@@ -3,23 +3,23 @@ import Foundation
 /// A date-anchored calendar entry (FUNCTIONALITY.md §2.4).
 public struct Event: Codable, Identifiable, Equatable, Hashable {
     public var id: String
-    /// `"YYYY-MM-DD"`.
-    public var date: String
+    /// The day this event belongs to (normalized to local start-of-day).
+    public var date: Date
     public var title: String
     public var notes: String?
     public var allDay: Bool
-    /// `"HH:mm"`.
-    public var startTime: String?
-    public var endTime: String?
+    /// Start/end times, anchored to ``date``'s day (see `EventService`).
+    public var startTime: Date?
+    public var endTime: Date?
 
     public init(
         id: String = Event.makeID(),
-        date: String,
+        date: Date,
         title: String,
         notes: String? = nil,
         allDay: Bool = false,
-        startTime: String? = nil,
-        endTime: String? = nil
+        startTime: Date? = nil,
+        endTime: Date? = nil
     ) {
         self.id = id
         self.date = date
@@ -38,5 +38,5 @@ public struct Event: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
-/// Events grouped by `"YYYY-MM-DD"` date key.
-public typealias EventMap = [String: [Event]]
+/// Events grouped by local start-of-day.
+public typealias EventMap = [Date: [Event]]

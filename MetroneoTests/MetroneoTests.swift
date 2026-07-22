@@ -1,27 +1,40 @@
 import XCTest
 @testable import Metroneo
 
-final class DateTimeUtilitiesTests: XCTestCase {
-    func testFormatTime() {
-        XCTAssertEqual(DateTimeUtilities.formatTime("00:00"), "12:00 AM")
-        XCTAssertEqual(DateTimeUtilities.formatTime("09:30"), "9:30 AM")
-        XCTAssertEqual(DateTimeUtilities.formatTime("12:00"), "12:00 PM")
-        XCTAssertEqual(DateTimeUtilities.formatTime("23:30"), "11:30 PM")
-    }
+/// Local start-of-day `Date` for a `"YYYY-MM-DD"` key.
+private func day(_ key: String) -> Date {
+    let p = key.split(separator: "-").compactMap { Int($0) }
+    return Calendar.current.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))!
+}
 
+final class DateTimeUtilitiesTests: XCTestCase {
     func testIncompleteTasksForDate() {
         let tasks = [
-            Task(title: "Due today", deadline: "2026-07-21T23:59:59", completedAt: "na", createDate: "2026-07-01"),
-            Task(title: "Done", deadline: "2026-07-21T10:00:00", completedAt: "2026-07-20", createDate: "2026-07-01"),
-            Task(title: "Other day", deadline: "2026-07-22T09:00:00", completedAt: "na", createDate: "2026-07-01")
+            Task(title: "Due today", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
+                 completedAt: nil, createDate: day("2026-07-01")),
+            Task(title: "Done", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
+                 completedAt: day("2026-07-20"), createDate: day("2026-07-01")),
+            Task(title: "Other day", deadline: DateTimeUtilities.endOfDay(day("2026-07-22")),
+                 completedAt: nil, createDate: day("2026-07-01"))
         ]
-        let result = DateTimeUtilities.incompleteTasks(tasks, forDate: "2026-07-21")
+        let result = DateTimeUtilities.incompleteTasks(tasks, forDate: day("2026-07-21"))
         XCTAssertEqual(result.map(\.title), ["Due today"])
     }
 
-    func testComposeDeadline() {
-        XCTAssertEqual(Task.composeDeadline(date: "2026-07-21", time: nil), "2026-07-21T23:59:59")
-        XCTAssertEqual(Task.composeDeadline(date: "2026-07-21", time: "09:30"), "2026-07-21T09:30:00")
+    func testDeadlineComposition() {
+        let cal = Calendar.current
+        let d = day("2026-07-21")
+
+        let eod = DateTimeUtilities.endOfDay(d)
+        XCTAssertFalse(DateTimeUtilities.hasExplicitTime(eod))
+        XCTAssertEqual(cal.component(.hour, from: eod), 23)
+        XCTAssertEqual(cal.component(.minute, from: eod), 59)
+
+        let nineThirty = cal.date(bySettingHour: 9, minute: 30, second: 0, of: d)!
+        let combined = DateTimeUtilities.combine(day: d, time: nineThirty)
+        XCTAssertTrue(DateTimeUtilities.hasExplicitTime(combined))
+        XCTAssertEqual(cal.component(.hour, from: combined), 9)
+        XCTAssertEqual(cal.component(.minute, from: combined), 30)
     }
 }
 
@@ -29,9 +42,9 @@ final class InMemoryDatabaseTests: XCTestCase {
     func testSaveAssignsIDsAndReloads() throws {
         let db = InMemoryDatabase()
         try db.saveTasks([
-            Task(title: "A", deadline: "2026-07-21T23:59:59", createDate: "2026-07-02",
+            Task(title: "A", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-02"),
                  subTasks: [SubTask(title: "sub")]),
-            Task(title: "B", deadline: "2026-07-22T23:59:59", createDate: "2026-07-01")
+            Task(title: "B", deadline: DateTimeUtilities.endOfDay(day("2026-07-22")), createDate: day("2026-07-01"))
         ])
         let loaded = try db.loadTasks()
         XCTAssertEqual(loaded.count, 2)
@@ -44,11 +57,13 @@ final class InMemoryDatabaseTests: XCTestCase {
 
     func testEventUpsertAndDelete() throws {
         let db = InMemoryDatabase()
-        let e = Event(id: "e1", date: "2026-07-21", title: "Meeting", startTime: "09:00")
+        let e = Event(id: "e1", date: day("2026-07-21"), title: "Meeting",
+                      startTime: DateTimeUtilities.combine(day: day("2026-07-21"),
+                                                           time: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!))
         try db.saveEvent(e)
-        XCTAssertEqual(try db.events(forDate: "2026-07-21").count, 1)
+        XCTAssertEqual(try db.events(forDate: day("2026-07-21")).count, 1)
         try db.deleteEvent(id: "e1")
-        XCTAssertEqual(try db.events(forDate: "2026-07-21").count, 0)
+        XCTAssertEqual(try db.events(forDate: day("2026-07-21")).count, 0)
     }
 }
 
@@ -57,7 +72,7 @@ final class TaskServiceTests: XCTestCase {
 
     func testAddAndComplete() {
         let s = makeService()
-        s.addTask(Task(title: "Write", deadline: "2026-07-21T23:59:59", createDate: "2026-07-20"))
+        s.addTask(Task(title: "Write", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20")))
         XCTAssertEqual(s.tasks.count, 1)
         let id = s.tasks[0].id!
         s.updateTaskPerformance(id: id, performance: 85, notes: "good")
@@ -68,13 +83,13 @@ final class TaskServiceTests: XCTestCase {
 
     func testBlankTitleDefaults() {
         let s = makeService()
-        s.addTask(Task(title: "   ", deadline: "2026-07-21T23:59:59", createDate: "2026-07-20"))
+        s.addTask(Task(title: "   ", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20")))
         XCTAssertEqual(s.tasks[0].title, "New Task")
     }
 
     func testToggleSubTask() {
         let s = makeService()
-        s.addTask(Task(title: "Parent", deadline: "2026-07-21T23:59:59", createDate: "2026-07-20",
+        s.addTask(Task(title: "Parent", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20"),
                        subTasks: [SubTask(title: "child")]))
         let tid = s.tasks[0].id!
         let sid = s.tasks[0].subTasks[0].id!
@@ -94,10 +109,10 @@ final class PerformanceTests: XCTestCase {
     }
 
     func testAverageAndFiltering() {
-        let now = DateTimeUtilities.date(fromKey: "2026-07-21")!
+        let now = day("2026-07-21")
         let tasks = [
-            Task(title: "recent", deadline: "x", performanceRating: 80, completedAt: "2026-07-20", createDate: "2026-07-01"),
-            Task(title: "old", deadline: "x", performanceRating: 40, completedAt: "2026-01-01", createDate: "2026-01-01")
+            Task(title: "recent", deadline: Date(), performanceRating: 80, completedAt: day("2026-07-20"), createDate: day("2026-07-01")),
+            Task(title: "old", deadline: Date(), performanceRating: 40, completedAt: day("2026-01-01"), createDate: day("2026-01-01"))
         ]
         let filtered = PerformanceAnalytics.filteredTasks(tasks, period: .week, now: now)
         XCTAssertEqual(filtered.map(\.title), ["recent"])

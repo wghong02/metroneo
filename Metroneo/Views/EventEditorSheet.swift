@@ -18,8 +18,8 @@ struct EventEditorSheet: View {
         self.onSave = onSave
         _title = State(initialValue: event?.title ?? "New Event")
         _allDay = State(initialValue: event?.allDay ?? false)
-        _startTime = State(initialValue: Self.time(from: event?.startTime) ?? Self.defaultTime(8))
-        _endTime = State(initialValue: Self.time(from: event?.endTime) ?? Self.defaultTime(9))
+        _startTime = State(initialValue: event?.startTime ?? Self.defaultTime(8))
+        _endTime = State(initialValue: event?.endTime ?? Self.defaultTime(9))
         _notes = State(initialValue: event?.notes ?? "")
     }
 
@@ -58,32 +58,20 @@ struct EventEditorSheet: View {
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { dismiss(); return }
         let event = Event(
             id: existing?.id ?? Event.makeID(),
-            date: existing?.date ?? DateTimeUtilities.todayKey(),
+            date: existing?.date ?? Date(),
             title: title,
             notes: notes.isEmpty ? nil : notes,
             allDay: allDay,
-            startTime: allDay ? nil : Self.hhmm(from: startTime),
-            endTime: allDay ? nil : Self.hhmm(from: endTime)
+            startTime: allDay ? nil : startTime,
+            endTime: allDay ? nil : endTime
         )
         onSave(event)
         dismiss()
     }
 
-    // MARK: - Time conversion
-
-    private static func time(from hhmm: String?) -> Date? {
-        guard let hhmm else { return nil }
-        let parts = hhmm.split(separator: ":").compactMap { Int($0) }
-        guard parts.count == 2 else { return nil }
-        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: Date())
-    }
+    // MARK: - Time helpers
 
     private static func defaultTime(_ hour: Int) -> Date {
         Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
-    }
-
-    private static func hhmm(from date: Date) -> String {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 }

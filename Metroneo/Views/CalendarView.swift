@@ -14,10 +14,9 @@ struct CalendarView: View {
         let event: Event?
     }
 
-    private var dateKey: String { DateTimeUtilities.dateKey(for: selectedDate) }
-    private var dayEvents: [Event] { events.events(on: dateKey) }
+    private var dayEvents: [Event] { events.events(on: selectedDate) }
     private var incompleteTasks: [Task] {
-        DateTimeUtilities.incompleteTasks(tasks.tasks, forDate: dateKey)
+        DateTimeUtilities.incompleteTasks(tasks.tasks, forDate: selectedDate)
     }
 
     var body: some View {
@@ -30,7 +29,7 @@ struct CalendarView: View {
                 Divider()
 
                 List {
-                    Section("Events & Tasks for \(dateKey)") {
+                    Section("Events & Tasks for \(DateTimeUtilities.shortDate(selectedDate))") {
                         if dayEvents.isEmpty && incompleteTasks.isEmpty {
                             Text("No events or tasks yet")
                                 .italic().foregroundStyle(.secondary)
@@ -41,7 +40,7 @@ struct CalendarView: View {
                                 .onTapGesture { editingEvent = EventTarget(event: event) }
                                 .swipeActions {
                                     Button(role: .destructive) {
-                                        events.deleteEvent(date: dateKey, id: event.id)
+                                        events.deleteEvent(date: selectedDate, id: event.id)
                                     } label: { Label("Delete", systemImage: "trash") }
                                 }
                         }
@@ -64,9 +63,9 @@ struct CalendarView: View {
                 EventEditorSheet(event: target.event) { result in
                     if let existing = target.event {
                         var updated = result; updated.id = existing.id
-                        events.updateEvent(date: dateKey, event: updated)
+                        events.updateEvent(date: selectedDate, event: updated)
                     } else {
-                        events.addEvent(date: dateKey, event: result)
+                        events.addEvent(date: selectedDate, event: result)
                     }
                 }
             }
@@ -88,10 +87,10 @@ private struct EventRow: View {
             Spacer()
             VStack(alignment: .trailing) {
                 if let start = event.startTime {
-                    Text(DateTimeUtilities.formatTime(start)).font(.caption.bold())
+                    Text(start.formatted(date: .omitted, time: .shortened)).font(.caption.bold())
                 }
                 if let end = event.endTime {
-                    Text(DateTimeUtilities.formatTime(end)).font(.caption).foregroundStyle(.secondary)
+                    Text(end.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
