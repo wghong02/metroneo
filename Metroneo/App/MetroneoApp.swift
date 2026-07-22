@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// App entry point. Boots the Core Data database and shares the services through
+/// App entry point. Boots the SwiftData store and shares the services through
 /// the environment (FUNCTIONALITY.md §10).
 @main
 struct MetroneoApp: App {
@@ -9,13 +9,11 @@ struct MetroneoApp: App {
     @StateObject private var preferences = PerformancePreferencesService()
 
     /// Kept so admin actions (stats/erase) in Settings can reach the DB.
-    private let database: TaskDatabase
+    private let database: SwiftDataDatabase
 
     init() {
-        // Fall back to an in-memory store if Core Data fails to load, so the app
-        // still runs (matching the RN app's non-fatal init behavior).
-        let db: TaskDatabase = (try? CoreDataDatabase()) ?? InMemoryDatabase()
-        try? db.initialize()
+        // A failure to open the on-disk store is fatal — no silent fallback.
+        let db = try! SwiftDataDatabase()
         self.database = db
         _taskService = StateObject(wrappedValue: TaskService(db: db))
         _eventService = StateObject(wrappedValue: EventService(db: db))

@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Observable task cache backed by a ``TaskDatabase`` (FUNCTIONALITY.md §4.1).
+/// Observable task cache backed by a ``SwiftDataDatabase`` (FUNCTIONALITY.md §4.1).
 ///
 /// Mutations edit an in-memory working copy and mark the service dirty; nothing
 /// is written to the database until ``save()`` is called. Ids are assigned once
@@ -12,9 +12,9 @@ public final class TaskService: ObservableObject {
     /// True when the working copy has edits not yet written to the database.
     @Published public private(set) var hasUnsavedChanges = false
 
-    private let db: TaskDatabase
+    private let db: SwiftDataDatabase
 
-    public init(db: TaskDatabase) {
+    public init(db: SwiftDataDatabase) {
         self.db = db
     }
 

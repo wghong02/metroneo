@@ -3,7 +3,7 @@ import SwiftUI
 /// Settings tab: Personal Preferences navigation + database management
 /// (FUNCTIONALITY.md §9).
 struct SettingsView: View {
-    let database: TaskDatabase
+    let database: SwiftDataDatabase
 
     @State private var alert: SettingsAlert?
 

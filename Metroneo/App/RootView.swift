@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Bottom tab bar with the app's four destinations (FUNCTIONALITY.md §1).
 struct RootView: View {
-    let database: TaskDatabase
+    let database: SwiftDataDatabase
 
     var body: some View {
         TabView {

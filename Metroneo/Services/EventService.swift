@@ -1,14 +1,14 @@
 import Foundation
 import Combine
 
-/// Observable event cache grouped by day, backed by a ``TaskDatabase``
+/// Observable event cache grouped by day, backed by a ``SwiftDataDatabase``
 /// (FUNCTIONALITY.md §4.2). Keys are local start-of-day dates.
 public final class EventService: ObservableObject {
     @Published public private(set) var eventsByDate: EventMap = [:]
 
-    private let db: TaskDatabase
+    private let db: SwiftDataDatabase
 
-    public init(db: TaskDatabase) {
+    public init(db: SwiftDataDatabase) {
         self.db = db
     }
 

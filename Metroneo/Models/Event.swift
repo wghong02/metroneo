@@ -32,7 +32,7 @@ public struct Event: Codable, Identifiable, Equatable, Hashable {
 
     /// Generates an id like the app's `event-{timestamp}-{rand}`.
     public static func makeID(date: Date = Date()) -> String {
-        let millis = Int64((date.timeIntervalSince1970 * 1000).rounded())
+        let millis = Int((date.timeIntervalSince1970 * 1000).rounded())
         let rand = Int.random(in: 0..<1_000_000)
         return "event-\(millis)-\(rand)"
     }

@@ -1,7 +1,7 @@
 # Metroneo — Functionality Reference
 
 Metroneo is a native iOS task/event planner with performance tracking, written in
-Swift + SwiftUI and persisted with Core Data. This document catalogs every
+Swift + SwiftUI and persisted with **SwiftData**. This document catalogs every
 functionality in the app, section by section. The source lives under `Metroneo/`;
 code comments reference the section numbers here (e.g. "FUNCTIONALITY.md §3").
 
@@ -28,20 +28,25 @@ There are three persisted domains:
 
 ## 2. Domain models
 
+The domain types (`Task`, `SubTask`, `Event`) are Swift **value types** used
+throughout the app. The store maps them to/from SwiftData `@Model` classes (§3).
+
 ### 2.1 Common fields
-Every task/subtask/event carries `id: String?`, `title: String`, `notes: String?`.
+Every task/subtask carries `id: String?`, `title: String`, `notes: String?`.
+Events use a required `id: String`.
 
 ### 2.2 Task
-- `id?` — string; assigned by the store on save.
+- `id?` — a stable UUID string assigned once when the task is first added; it is
+  **never reassigned** across edits or saves.
 - `title` — required; defaults to `"New Task"` when blank.
 - `notes?`
-- `deadline: String` — stored as `"YYYY-MM-DDTHH:mm:ss"`. When the user gives no
-  time it defaults to **`T23:59:59`**; with a time it is `T{HH:mm}:00`.
+- `deadline: Date` — a full instant. A time of **`23:59:59`** marks an end-of-day
+  deadline with *no explicit time*; any other time is the user's chosen time.
 - `priorityRating: Int` — 0–100, default 50.
 - `performanceRating: Int` — 0–100, default 50.
-- `completedAt: String` — `"YYYY-MM-DD"` when complete, or the sentinel **`"na"`**
-  (`kNotCompleted`) when not complete.
-- `createDate: String` — `"YYYY-MM-DD"` (local). Required.
+- `completedAt: Date?` — the completion instant, or **`nil`** when not complete
+  (`isCompleted == (completedAt != nil)`).
+- `createDate: Date` — required.
 - `frequencyPattern` — one of `daily | weekly | monthly | yearly | custom | none`
   (default `none`).
 - `frequencyCount: Int` — default 0 (editor default 1).
@@ -52,40 +57,42 @@ Every task/subtask/event carries `id: String?`, `title: String`, `notes: String?
 - `subTasks: [SubTask]`.
 
 ### 2.3 SubTask
-Same rating/deadline/completion fields as Task, plus:
+Same rating/deadline/completion fields as Task (`deadline: Date`,
+`completedAt: Date?`), plus:
 - `parentTaskId: String?`
 - `order: Int` — display order within the parent.
 
 ### 2.4 Event
 - `id: String` — required.
-- `date: String` — `"YYYY-MM-DD"`.
+- `date: Date` — the event's day, normalized to local start-of-day.
 - `allDay: Bool`
-- `startTime: String?`, `endTime: String?` — `"HH:mm"`.
-- `EventMap = [String: [Event]]` — events grouped by date key.
+- `startTime: Date?`, `endTime: Date?` — times of day, anchored to the event's day.
+- `EventMap = [Date: [Event]]` — events grouped by local start-of-day.
 
 ---
 
 ## 3. Persistence
 
-Persistence is abstracted behind the `TaskDatabase` protocol. Two implementations:
+Persistence is **SwiftData**. `SwiftDataDatabase` is the sole store; it maps the
+domain value types to/from three `@Model` classes — `StoredTask`, `StoredSubTask`,
+`StoredEvent` — with a cascade-delete relationship from a task to its subtasks. An
+`inMemory` initializer backs the tests. There is no Objective-C and no
+`.xcdatamodeld`: `Int`, `Date`, `[String]`, and the `FrequencyPattern` enum all
+persist natively.
 
-- **`CoreDataDatabase`** (production) — backed by the `Metroneo.xcdatamodeld` model
-  with entities `CDTask`, `CDSubTask`, `CDEvent`. `CDSubTask` has a
-  cascade-delete relationship to its parent `CDTask`.
-- **`InMemoryDatabase`** — used by tests and previews.
+Operations:
 
-Operations (`TaskDatabase`):
-
-- **Tasks** — `saveTasks(tasks)` replaces the entire task + subtask set in one
-  save (delete-all then insert), applying defaults/validation (blank title →
-  `"New Task"`); the store assigns string ids and per-parent subtask `order`.
-  `loadTasks()` returns tasks ordered by `createDate` descending, each with its
-  subtasks ordered by `order`.
-- **Events** — `saveEvent(event)` upserts a single event; `deleteEvent(id)`,
-  `event(id:)`, `events(forDate:)`, and `loadEvents()` (ordered by date, then
-  start time, then title). `title` and `date` are required.
-- **Admin** — `initialize()`, `reset()` (clears all data), and `stats()`
-  (row counts + connection state).
+- **Tasks** — `saveTasks(tasks)` replaces the entire task + subtask set (delete-all
+  then insert), **preserving each incoming id** (minting a UUID only when one is
+  missing) so nothing is reshuffled. Blank titles fall back to defaults and subtask
+  `order` is set from position. `loadTasks()` returns tasks ordered by `createDate`
+  descending, each with its subtasks ordered by `order`.
+- **Events** — `saveEvent(event)` upserts a single event (by unique `eventID`);
+  `deleteEvent(id)`, `event(id:)`, `events(forDate:)` (same-day range), and
+  `loadEvents()` (ordered by date, then start time, then title). `title` is required.
+- **Admin** — `reset()` (clears all data) and `stats()` (row counts + state).
+  Constructing the store `throws MetroneoError.database` if it fails to open; the
+  app treats that as fatal (§10).
 
 ---
 
@@ -93,36 +100,41 @@ Operations (`TaskDatabase`):
 
 `TaskService`, `EventService`, and `PerformancePreferencesService` are
 `ObservableObject`s injected through the SwiftUI environment; they cache state and
-delegate persistence to a `TaskDatabase` (or `UserDefaults` for preferences).
+delegate persistence to `SwiftDataDatabase` (or `UserDefaults` for preferences).
 
 ### 4.1 TaskService
-Caches the task list and persists by re-saving the whole list.
-- `loadTasks()`, `saveTasks(tasks)`
-- `addTask(task)` — title defaults to `"New Task"`, notes trimmed; appends.
+Holds an **in-memory working copy** of the task list. Mutations edit that copy and
+set `hasUnsavedChanges`; **nothing is written to the store until `save()`**. Because
+ids are stable, a captured id stays valid across any number of edits and saves.
+- `loadTasks()` — loads from the store and clears the dirty flag.
+- `save()` — persists the working copy, then reloads it.
+- `discardChanges()` — reloads from the store, dropping unsaved edits.
+- `addTask(task)` — assigns a stable id, defaults a blank title, appends.
 - `updateTask(updated)` — replaces the task with matching `id`.
 - `deleteTask(id)` — removes by id.
-- `completeTask(id)` — sets `completedAt` to today (`YYYY-MM-DD`).
-- `uncompleteTask(id)` — sets `completedAt` back to `"na"`.
+- `completeTask(id)` — sets `completedAt` to the current instant.
+- `uncompleteTask(id)` — clears `completedAt` (`nil`).
 - `updateTaskPriority(id, priority)`.
 - `updateTaskPerformance(id, performance, notes?)` — sets `performanceRating`
   (and `performanceNotes`).
-- `toggleSubTask(taskId, subTaskId)` — flips a subtask's `completedAt`.
+- `toggleSubTask(taskId, subTaskId)` — flips a subtask's `completedAt` (now ↔ nil).
 
 ### 4.2 EventService
-Caches events grouped by date (`[date: [Event]]`).
-- `loadEvents()` — loads all, groups by `date`.
-- `addEvent(date, event)` — forces `event.date = date`, upserts, updates cache.
-- `updateEvent(date, event)` — upsert + cache replace by id.
-- `deleteEvent(date, id)` — delete + cache prune (drops the date key when empty).
+Caches events grouped by local start-of-day (`[Date: [Event]]`). Unlike tasks,
+event edits **persist immediately**.
+- `loadEvents()` — loads all, groups by start-of-day.
+- `addEvent(date, event)` / `updateEvent(date, event)` — normalize the event to that
+  day and re-anchor its start/end times to it, upsert, update cache.
+- `deleteEvent(date, id)` — delete + cache prune (drops the day key when empty).
 - `moveEvent(oldDate, newDate, id)` — re-dates an event and moves it between
   cache buckets.
-- `events(on: date)` — cached lookup for a date.
+- `events(on: date)` — cached lookup by start-of-day.
 
 ### 4.3 PerformancePreferencesService
 Stores `PerformanceCutoffs { fair, good, veryGood, excellent }` in `UserDefaults`
 under `@performance_cutoffs`.
 - **Defaults: `fair 60, good 75, veryGood 80, excellent 90`.**
-- `getCutoffs()` / `cutoffs`, `setCutoffs(c)`, `resetToDefaults()`.
+- `cutoffs`, `setCutoffs(c)`, `resetToDefaults()`.
 - `text(for:)` → `Excellent | Very Good | Good | Fair | Poor`
   (Poor is anything below `fair`).
 - `color(for:)` → hex: Excellent `#2E7D32`, Very Good `#4CAF50`, Good `#2196F3`,
@@ -132,13 +144,19 @@ under `@performance_cutoffs`.
 
 ## 5. Utility functions (`DateTimeUtilities`)
 
-- **`formatTime("HH:mm")`** → 12-hour `"h:mm AM/PM"` (hour 0→12, >12 subtract 12).
-- **`formatDeadline("YYYY-MM-DD[THH:mm:ss]")`** → localized date, and if a time
-  part is present, `"<date> at <formatTime(HH:mm)>"`.
-- **`incompleteTasks(_:forDate:)`** → tasks whose `completedAt` is `"na"` and
-  whose deadline **date part** equals `targetDate` (exact day).
-- `dateKey(for:)` / `date(fromKey:)` — `"YYYY-MM-DD"` ⇄ `Date`; `todayKey()`.
-- Picker option generators: hours `00..23`, minutes `00..59`, years current ±10.
+- **`startOfDay(date)`** / **`endOfDay(day)`** — local day boundaries; `endOfDay`
+  returns `23:59:59`, the "no explicit time" deadline sentinel.
+- **`combine(day:time:)`** — merges a day's calendar date with a time-of-day.
+- **`hasExplicitTime(deadline)`** — false when the deadline is the `23:59:59`
+  end-of-day sentinel.
+- **`shortDate(date)`** — localized short date.
+- **`formatDeadline(deadline: Date)`** — localized date, plus `"<date> at <time>"`
+  when the deadline carries an explicit (non-end-of-day) time.
+- **`incompleteTasks(_:forDate:)`** — tasks with `completedAt == nil` whose deadline
+  falls on the same day as the target date.
+
+Event start/end times are displayed with SwiftUI's `Date.formatted`; there is no
+bespoke time-string formatter.
 
 ---
 
@@ -147,24 +165,28 @@ under `@performance_cutoffs`.
 - Native graphical `DatePicker` calendar; selecting a day drives the list below.
 - For the selected date, a combined list of **events** (for that date) then
   **incomplete tasks due that date** (`DateTimeUtilities.incompleteTasks`).
-  - Event row: title, start/end time (formatted); tap to **edit**, swipe to
-    **delete**. Empty → "No events or tasks yet".
+  - Event row: title, start/end time (via `Date.formatted`); tap to **edit**, swipe
+    to **delete**. Empty → "No events or tasks yet".
   - Task row (read-only here, visually distinct): title, `Deadline: …`, notes,
     `Priority: N`.
 - **+ Add Event** (toolbar) opens the event editor.
 
 ### 6.1 Event editor (`EventEditorSheet`)
 Fields: title (default "New Event"), **All Day** toggle (hides the time pickers
-when on), start time & end time, notes. Empty title just closes. Saving edits
-preserves the event id; adding generates a new id.
+when on), start time & end time (hour-and-minute `DatePicker`s bound to `Date`),
+notes. Empty title just closes. Saving edits preserves the event id; adding
+generates a new id. The service re-anchors the chosen times to the event's day.
 
 ---
 
 ## 7. Tasks tab (`TaskListView`)
 
 - Header segmented control: **Upcoming (n)** / **Completed (n)**.
-  - Upcoming = `completedAt == "na"`, sorted by deadline date ascending.
-  - Completed = `completedAt != "na"`, sorted by `completedAt` descending.
+  - Upcoming = not completed, sorted by `deadline` ascending.
+  - Completed = completed, sorted by `completedAt` descending.
+- **Save** (checkmark) toolbar button — persists the working copy; enabled only when
+  there are unsaved changes. All the actions below stage edits **in memory** until
+  Save is tapped.
 - **Floating "+" button** opens the task editor.
 - Task card shows: checkbox (toggle completion), title (tap to edit),
   Priority + Performance/100, notes, `Created … | Deadline …`, type tags, a
@@ -173,12 +195,11 @@ preserves the event id; adding generates a new id.
 - **Completion toggle**:
   - Completing is **blocked if any subtask is incomplete** (alert). Otherwise it
     opens the **Performance Rating** sheet; saving the rating sets
-    `performanceRating`(+notes) and marks the task complete (`completedAt` =
-    today).
-  - Un-completing sets `completedAt = "na"`.
+    `performanceRating`(+notes) and marks the task complete (`completedAt` = now).
+  - Un-completing clears `completedAt`.
 - **Long-press a completed task** → reopen Performance Rating to edit its
   rating/notes (does not change completion).
-- **Subtask checkbox** toggles that subtask's `completedAt` (today ↔ `"na"`).
+- **Subtask checkbox** toggles that subtask's `completedAt` (now ↔ nil).
 - **Swipe → Delete**.
 
 ### 7.1 Task editor (`TaskEditorSheet`)
@@ -187,8 +208,8 @@ default 50), Performance slider (0–100, default 50), Create Date (default toda
 Deadline date (default today) + optional deadline time, **Recurring** toggle →
 Frequency Pattern picker + Frequency Count, Estimated Duration (min), Task Types
 (add/remove chips), Subtasks (title+notes, add/remove; each gets `order`), Notes.
-Deadline is composed as `T{time}:00` or `T23:59:59`. New tasks start with
-`completedAt = "na"`; editing preserves `id`.
+The deadline is `endOfDay(day)` when no time is set, or `combine(day, time)` when a
+time is. New tasks start not-complete (`completedAt = nil`); editing preserves `id`.
 
 ### 7.2 Performance Rating (`PerformanceRatingSheet`)
 A 0–100 slider (default 50; pre-filled with the task's rating when editing) plus
@@ -198,11 +219,12 @@ optional notes. Saving emits `(rating, notes?)`.
 
 ## 8. Performance tab (`PerformanceView` + `PerformanceAnalytics`)
 
-- Pull-to-refresh reloads tasks.
 - **Period selector**: Week / Month / 3 Months / Year / All Time / Custom.
   - Ranges end "now"; start = now − (7d / 1mo / 3mo / 1yr), All Time = epoch,
-    Custom = a user-entered `YYYY-MM-DD` start.
+    Custom = a start date chosen with a `DatePicker` (bounded to today or earlier).
   - Filters to **completed** tasks whose `completedAt` falls in range.
+- **Save** (checkmark) toolbar button — rating edits made here share the Tasks tab's
+  unsaved-changes state, so this Save persists them too.
 - **Stat cards**: tasks completed in period, and average performance (one decimal).
 - **Weekly chart** (Swift Charts) — last 5 weeks: average performance of tasks
   completed each week; each point colored by `PerformancePreferencesService`.
@@ -231,9 +253,9 @@ optional notes. Saving emits `(rating, notes?)`.
 
 ## 10. App bootstrap (`MetroneoApp`)
 
-On launch the app constructs the `CoreDataDatabase` (falling back to
-`InMemoryDatabase` if the store fails to load), initializes it, injects the
-services into the environment, and loads tasks + events before showing the tabs.
+On launch the app constructs `SwiftDataDatabase` — a failure to open the store is
+**fatal** (no fallback) — injects the services into the environment, and loads
+tasks + events before showing the tabs.
 
 ---
 
@@ -241,13 +263,13 @@ services into the environment, and loads tasks + events before showing the tabs.
 
 - **Models** (`Metroneo/Models`) — `Task`, `SubTask`, `Event` value types
   (`Codable`/`Identifiable`).
-- **Storage** (`Metroneo/Storage`) — `TaskDatabase` protocol with `CoreDataDatabase`
-  and `InMemoryDatabase`.
+- **Storage** (`Metroneo/Storage`) — `SwiftDataDatabase` (single engine) plus the
+  `@Model` types in `StoredModels`. No persistence protocol.
 - **Services** (`Metroneo/Services`) — `TaskService`, `EventService`,
   `PerformancePreferencesService`, and `PerformanceAnalytics` (pure calculations).
 - **Utilities** (`Metroneo/Utilities`) — `DateTimeUtilities`, `Color(hex:)`.
 - **Views** (`Metroneo/Views` + `Metroneo/App`) — `RootView`, `CalendarView`,
   `TaskListView`, `PerformanceView`, `SettingsView` + sub-screens, and the
   task/event/rating sheets, using the native graphical calendar and Swift Charts.
-- **Tests** (`MetroneoTests`) — cover utilities, the in-memory store, services,
+- **Tests** (`MetroneoTests`) — cover utilities, the SwiftData store, services,
   and analytics.

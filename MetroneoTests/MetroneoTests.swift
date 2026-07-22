@@ -38,37 +38,38 @@ final class DateTimeUtilitiesTests: XCTestCase {
     }
 }
 
-final class InMemoryDatabaseTests: XCTestCase {
-    func testSaveAssignsIDsAndReloads() throws {
-        let db = InMemoryDatabase()
+final class SwiftDataDatabaseTests: XCTestCase {
+    private func makeDB() throws -> SwiftDataDatabase { try SwiftDataDatabase(inMemory: true) }
+
+    func testTaskRoundTripPreservesIDsAndSubtasks() throws {
+        let db = try makeDB()
         try db.saveTasks([
-            Task(title: "A", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-02"),
-                 subTasks: [SubTask(title: "sub")]),
+            Task(id: "keep-me", title: "A", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
+                 completedAt: day("2026-07-20"), createDate: day("2026-07-02"),
+                 types: ["work"], subTasks: [SubTask(id: "s1", title: "child")]),
             Task(title: "B", deadline: DateTimeUtilities.endOfDay(day("2026-07-22")), createDate: day("2026-07-01"))
         ])
         let loaded = try db.loadTasks()
-        XCTAssertEqual(loaded.count, 2)
-        // Ordered by createDate DESC.
-        XCTAssertEqual(loaded.first?.title, "A")
-        XCTAssertNotNil(loaded.first?.id)
+        XCTAssertEqual(loaded.map(\.title), ["A", "B"])          // createDate DESC
+        XCTAssertEqual(loaded.first?.id, "keep-me")               // id preserved
+        XCTAssertEqual(loaded.first?.types, ["work"])
+        XCTAssertEqual(loaded.first?.completedAt, day("2026-07-20"))
+        XCTAssertEqual(loaded.first?.subTasks.first?.id, "s1")
         XCTAssertEqual(loaded.first?.subTasks.first?.order, 0)
-        XCTAssertNotNil(loaded.first?.subTasks.first?.id)
     }
 
     func testEventUpsertAndDelete() throws {
-        let db = InMemoryDatabase()
-        let e = Event(id: "e1", date: day("2026-07-21"), title: "Meeting",
-                      startTime: DateTimeUtilities.combine(day: day("2026-07-21"),
-                                                           time: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!))
-        try db.saveEvent(e)
-        XCTAssertEqual(try db.events(forDate: day("2026-07-21")).count, 1)
+        let db = try makeDB()
+        try db.saveEvent(Event(id: "e1", date: day("2026-07-21"), title: "Meeting"))
+        try db.saveEvent(Event(id: "e1", date: day("2026-07-21"), title: "Renamed"))
+        XCTAssertEqual(try db.events(forDate: day("2026-07-21")).map(\.title), ["Renamed"])  // upsert, not dup
         try db.deleteEvent(id: "e1")
-        XCTAssertEqual(try db.events(forDate: day("2026-07-21")).count, 0)
+        XCTAssertTrue(try db.events(forDate: day("2026-07-21")).isEmpty)
     }
 }
 
 final class TaskServiceTests: XCTestCase {
-    private func makeService() -> TaskService { TaskService(db: InMemoryDatabase()) }
+    private func makeService() -> TaskService { TaskService(db: try! SwiftDataDatabase(inMemory: true)) }
 
     private func sampleTask(_ title: String = "Write") -> Task {
         Task(title: title, deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20"))
