@@ -74,10 +74,10 @@ struct PersonalPreferencesView: View {
 struct PerformanceCutoffsView: View {
     @EnvironmentObject private var preferences: PerformancePreferencesService
 
-    @State private var fair = ""
-    @State private var good = ""
-    @State private var veryGood = ""
-    @State private var excellent = ""
+    @State private var fair = 0
+    @State private var good = 0
+    @State private var veryGood = 0
+    @State private var excellent = 0
     @State private var savedAlert = false
 
     var body: some View {
@@ -87,10 +87,10 @@ struct PerformanceCutoffsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                cutoffRow("Fair", text: $fair)
-                cutoffRow("Good", text: $good)
-                cutoffRow("Very Good", text: $veryGood)
-                cutoffRow("Excellent", text: $excellent)
+                cutoffRow("Fair", value: $fair)
+                cutoffRow("Good", value: $good)
+                cutoffRow("Very Good", value: $veryGood)
+                cutoffRow("Excellent", value: $excellent)
             }
             Section {
                 Button("Save Changes") { save() }
@@ -107,11 +107,11 @@ struct PerformanceCutoffsView: View {
         } message: { Text("Performance cutoffs saved successfully!") }
     }
 
-    private func cutoffRow(_ label: String, text: Binding<String>) -> some View {
+    private func cutoffRow(_ label: String, value: Binding<Int>) -> some View {
         HStack {
             Text(label)
             Spacer()
-            TextField("", text: text)
+            TextField("", value: value, format: .number)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 80)
@@ -120,19 +120,14 @@ struct PerformanceCutoffsView: View {
 
     private func seed() {
         let c = preferences.cutoffs
-        fair = String(c.fair); good = String(c.good)
-        veryGood = String(c.veryGood); excellent = String(c.excellent)
+        fair = c.fair; good = c.good
+        veryGood = c.veryGood; excellent = c.excellent
     }
 
     private func save() {
-        let d = PerformanceCutoffs.defaults
-        let new = PerformanceCutoffs(
-            fair: Int(fair) ?? d.fair,
-            good: Int(good) ?? d.good,
-            veryGood: Int(veryGood) ?? d.veryGood,
-            excellent: Int(excellent) ?? d.excellent
-        )
-        preferences.setCutoffs(new)
+        preferences.setCutoffs(PerformanceCutoffs(
+            fair: fair, good: good, veryGood: veryGood, excellent: excellent
+        ))
         seed()
         savedAlert = true
     }

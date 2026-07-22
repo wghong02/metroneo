@@ -124,8 +124,6 @@ struct PerformanceView: View {
     private var recentList: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Recent Performance").font(.title3.bold())
-            Text("Long-press a task to edit its performance rating")
-                .font(.caption).italic().foregroundStyle(.secondary)
 
             if filtered.isEmpty {
                 Text("No completed tasks in the selected time period. Complete some tasks to see your performance data!")
@@ -134,7 +132,9 @@ struct PerformanceView: View {
             } else {
                 ForEach(filtered.prefix(10)) { task in
                     recentRow(task)
-                        .onLongPressGesture { ratingTarget = task }
+                        .contextMenu {
+                            Button { ratingTarget = task } label: { Label("Edit Rating", systemImage: "star") }
+                        }
                 }
             }
         }

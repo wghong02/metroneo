@@ -202,7 +202,11 @@ private struct TaskCard: View {
             }
         }
         .padding(.vertical, 4)
-        // Long-press a completed task to edit its rating.
-        .onLongPressGesture { onEditRating() }
+        .contextMenu {
+            Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
+            if task.isCompleted {
+                Button { onEditRating() } label: { Label("Edit Rating", systemImage: "star") }
+            }
+        }
     }
 }

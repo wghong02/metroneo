@@ -195,8 +195,9 @@ generates a new id. The service re-anchors the chosen times to the event's day.
     opens the **Performance Rating** sheet; saving the rating sets
     `performanceRating`(+notes) and marks the task complete (`completedAt` = now).
   - Un-completing clears `completedAt`.
-- **Long-press a completed task** → reopen Performance Rating to edit its
-  rating/notes (does not change completion).
+- **Touch and hold a task** → context menu with **Edit**, and (for completed
+  tasks) **Edit Rating** which reopens Performance Rating to edit its rating/notes
+  without changing completion.
 - **Subtask checkbox** toggles that subtask's `completedAt` (now ↔ nil).
 - **Swipe → Delete**.
 
@@ -230,8 +231,8 @@ optional notes. Saving emits `(rating, notes?)`.
 - **Insights**: Best Week, Best Month (max-average period), Overall Trend
   (Improving/Declining/Neutral, last vs first weekly average), Total Tasks.
 - **Recent Performance**: up to 10 filtered tasks, each with a colored
-  performance badge, completed date, rating/100, and notes. Long-press → edit
-  rating. Empty period → empty-state message.
+  performance badge, completed date, rating/100, and notes. Touch and hold a row
+  → **Edit Rating** context action. Empty period → empty-state message.
 
 ---
 
@@ -243,8 +244,8 @@ optional notes. Saving emits `(rating, notes?)`.
     `#if DEBUG`): Database Test (connection check), Database Stats (row counts),
     **Erase All Data** (`reset()`).
 - **Personal Preferences** → row to **Performance Cutoffs**.
-- **Performance Cutoffs**: numeric inputs for fair/good/veryGood/excellent
-  (blank fields fall back to defaults on save), **Save Changes**, **Reset to
+- **Performance Cutoffs**: integer inputs for fair/good/veryGood/excellent
+  (`TextField(value:format:)`, number-pad), **Save Changes**, **Reset to
   Defaults**. Anything below "Fair" is "Poor".
 
 ---
