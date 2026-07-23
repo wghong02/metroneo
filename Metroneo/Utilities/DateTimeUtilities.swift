@@ -1,7 +1,7 @@
 import Foundation
 
-/// Pure date/time helpers (FUNCTIONALITY.md §5). Dates are modeled as `Date`;
-/// time-of-day for events is still carried as 24-hour `"HH:mm"` strings.
+/// Pure date/time helpers (FUNCTIONALITY.md §5). Dates and times-of-day are both
+/// modeled as `Date`; event start/end times are anchored to their day's date.
 public enum DateTimeUtilities {
 
     private static let gregorian: Calendar = {

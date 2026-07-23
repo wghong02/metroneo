@@ -302,8 +302,9 @@ public enum PerformanceAnalytics {
     }
 
     private static func applyTrends(_ points: [PerformanceDataPoint]) -> [PerformanceDataPoint] {
+        guard points.count > 1 else { return points }
         var result = points
-        for i in 1..<max(result.count, 1) where i < result.count {
+        for i in 1..<result.count {
             if result[i].average > result[i - 1].average { result[i].trend = .up }
             else if result[i].average < result[i - 1].average { result[i].trend = .down }
             else { result[i].trend = .stable }

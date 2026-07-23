@@ -1,7 +1,7 @@
 # Metroneo
 
 Metroneo is a native iOS task and event planner with built-in performance
-tracking, built in **Swift + SwiftUI** and backed by **Core Data**.
+tracking, built in **Swift + SwiftUI** and backed by **SwiftData**.
 
 Plan your day on a calendar, manage tasks with subtasks and priorities, rate how
 well you performed as you complete them, and review your trends over time with
@@ -39,7 +39,7 @@ open Metroneo.xcodeproj
 
 Select the **Metroneo** scheme and an iOS Simulator (or a device), then Run
 (⌘R). No third-party dependencies or package resolution are required — the app
-uses only Apple frameworks (SwiftUI, Core Data, Charts).
+uses only Apple frameworks (SwiftUI, SwiftData, Charts).
 
 ### Running the tests
 
@@ -55,30 +55,31 @@ the services, and the performance analytics.
 ## Architecture
 
 The app separates a pure, testable domain layer from the SwiftUI presentation
-layer. Persistence sits behind a protocol so tests and previews swap in an
-in-memory store.
+layer. Persistence is SwiftData; an in-memory store configuration backs tests
+and previews.
 
 ```
 Metroneo/
 ├── App/          MetroneoApp (entry point), RootView (tab bar)
 ├── Models/       Task, SubTask, Event value types
-├── Storage/      TaskDatabase protocol; CoreDataDatabase + InMemoryDatabase
+├── Storage/      StoredModels (@Model classes) + SwiftDataDatabase
 ├── Services/     TaskService, EventService, PerformancePreferencesService,
 │                 PerformanceAnalytics
-├── Utilities/    DateTimeUtilities, Color(hex:)
+├── Utilities/    DateTimeUtilities, Palette, Log
 ├── Views/        CalendarView, TaskListView, PerformanceView, SettingsView,
 │                 and the task/event/rating sheets
-└── Resources/    Metroneo.xcdatamodeld (Core Data model)
+└── Resources/    (no on-disk model — SwiftData persists the @Model classes)
 
 MetroneoTests/     Unit tests for utilities, storage, services, analytics
 ```
 
 - **Models** are `Codable`/`Identifiable` structs with no framework dependencies.
-- **`TaskDatabase`** abstracts persistence. `CoreDataDatabase` is the production
-  store (model entities `CDTask`, `CDSubTask`, `CDEvent`); `InMemoryDatabase`
-  backs tests and previews. Saving tasks replaces the whole task + subtask set.
+- **`SwiftDataDatabase`** is the sole persistence store. It maps the domain value
+  types to/from three `@Model` classes — `StoredTask`, `StoredSubTask`,
+  `StoredEvent` — and its `inMemory` initializer backs tests and previews. Saving
+  tasks replaces the whole task + subtask set, preserving each incoming id.
 - **Services** are `ObservableObject`s injected via the SwiftUI environment; they
-  cache state and delegate persistence to a `TaskDatabase` (preferences use
+  cache state and delegate persistence to `SwiftDataDatabase` (preferences use
   `UserDefaults`).
 - **`PerformanceAnalytics`** holds the period filtering and weekly/monthly
   aggregation as pure functions.
@@ -91,8 +92,8 @@ MetroneoTests/     Unit tests for utilities, storage, services, analytics
 | `SubTask` | title, ratings, deadline, completion, order within its parent |
 | `Event` | id, date, title, notes, allDay, start/end time |
 
-Times are 24-hour `"HH:mm"` strings; dates are `"YYYY-MM-DD"` keys. A task's
-`completedAt` is `"na"` until it is completed.
+Dates and times are `Date` values; events are grouped by local start-of-day. A
+task's `completedAt` is `nil` until it is completed.
 
 ## Project history
 
