@@ -17,6 +17,11 @@ struct PerformanceView: View {
     private var filtered: [Task] {
         PerformanceAnalytics.filteredTasks(tasks.tasks, period: period, customStart: customStart)
     }
+    /// The period's completed tasks, most-recently-completed first — the order the
+    /// "Recent Performance" list needs (`filtered` is in createDate order).
+    private var recentByCompletion: [Task] {
+        filtered.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+    }
     /// One adaptive trend series whose bucket size follows the selected period.
     private var trend: [PerformanceDataPoint] {
         PerformanceAnalytics.trendSeries(tasks.tasks, period: period,
@@ -123,7 +128,9 @@ struct PerformanceView: View {
                     .foregroundStyle(preferences.color(for: threshold).opacity(0.55))
                     .lineStyle(StrokeStyle(lineWidth: 1.6, dash: [5, 3]))
             }
-            ForEach(trend, id: \.period) { point in
+            // Only plot buckets that actually have completed tasks; empty buckets
+            // stay a gap on the line instead of dropping to a misleading 0.
+            ForEach(trend.filter { $0.taskCount > 0 }, id: \.period) { point in
                 LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
                     .interpolationMethod(.catmullRom)
                 PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
@@ -257,7 +264,7 @@ struct PerformanceView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
                     .padding()
             } else {
-                ForEach(filtered.prefix(10)) { task in
+                ForEach(recentByCompletion.prefix(10)) { task in
                     recentRow(task)
                         .contextMenu {
                             Button { ratingTarget = task } label: { Label("Edit Rating", systemImage: "star") }

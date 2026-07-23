@@ -210,4 +210,19 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(80), pt(72)]), "Declining")  // -10%
         XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(0), pt(50)]), "Improving")   // from zero
     }
+
+    func testEmptyBucketsIgnoredInTrendAndBest() {
+        func pt(_ avg: Double, _ count: Int) -> PerformanceDataPoint {
+            PerformanceDataPoint(period: "\(avg)-\(count)", average: avg, taskCount: count, trend: .stable)
+        }
+        // A leading empty bucket (avg 0, no tasks) must not drag the comparison:
+        // a flat 80 → 80 series reads Neutral, not Improving-from-zero.
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(0, 0), pt(80, 2), pt(80, 3)]), "Neutral")
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(0, 0), pt(60, 2), pt(90, 3)]), "Improving")
+        // best() skips empty buckets even though their average is 0.
+        XCTAssertEqual(PerformanceAnalytics.best([pt(0, 0), pt(60, 2), pt(90, 3)])?.average, 90)
+        // All-empty series has no best and no trend.
+        XCTAssertNil(PerformanceAnalytics.best([pt(0, 0), pt(0, 0)]))
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(0, 0), pt(0, 0)]), "N/A")
+    }
 }

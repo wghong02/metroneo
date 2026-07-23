@@ -199,15 +199,18 @@ public enum PerformanceAnalytics {
         return applyTrends(points)
     }
 
-    /// Best (max-average) point in a series, if any.
+    /// Best (max-average) point in a series, if any. Empty buckets (average 0
+    /// with no tasks) are ignored so they can't win.
     public static func best(_ series: [PerformanceDataPoint]) -> PerformanceDataPoint? {
-        series.max { $0.average < $1.average }
+        series.filter { $0.taskCount > 0 }.max { $0.average < $1.average }
     }
 
-    /// Overall trend comparing the last vs first bucket average of a series.
+    /// Overall trend comparing the last vs first *non-empty* bucket average.
     /// A percentage change (relative to the first bucket) within ±5% is Neutral.
+    /// Empty buckets are skipped so a leading gap doesn't read as "Improving".
     public static func overallTrend(_ series: [PerformanceDataPoint]) -> String {
-        guard series.count > 1, let first = series.first, let last = series.last else { return "N/A" }
+        let nonEmpty = series.filter { $0.taskCount > 0 }
+        guard nonEmpty.count > 1, let first = nonEmpty.first, let last = nonEmpty.last else { return "N/A" }
         guard first.average != 0 else { return last.average > 0 ? "Improving" : "Neutral" }
         let percentChange = (last.average - first.average) / first.average * 100
         if percentChange > 5 { return "Improving" }
