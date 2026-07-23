@@ -278,6 +278,10 @@ On launch the app constructs `SwiftDataDatabase` — a failure to open the store
 **fatal** (no fallback) — injects the services into the environment, and loads
 tasks + events before showing the tabs.
 
+The app icon is a single-size 1024×1024 `metroneo.png` in
+`Assets.xcassets/AppIcon.appiconset` (referenced by `ASSETCATALOG_COMPILER_APPICON_NAME
+= AppIcon`); `AccentColor` supplies the tint.
+
 ---
 
 ## 11. Architecture summary
@@ -293,5 +297,7 @@ tasks + events before showing the tabs.
 - **Views** (`Metroneo/Views` + `Metroneo/App`) — `RootView`, `CalendarView`,
   `TaskListView`, `PerformanceView`, `SettingsView` + sub-screens, and the
   task/event/rating sheets, using the native graphical calendar and Swift Charts.
+- **Assets** (`Metroneo/Assets.xcassets`) — the `AppIcon` (single-size 1024×1024
+  `metroneo.png`) and the `AccentColor` tint.
 - **Tests** (`MetroneoTests`) — cover utilities, the SwiftData store, services,
   and analytics.
