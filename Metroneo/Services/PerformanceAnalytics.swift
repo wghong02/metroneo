@@ -16,6 +16,35 @@ public enum PerformancePeriod: String, CaseIterable {
     }
 }
 
+/// Bucket size for the adaptive trend chart. The month-based tiers form an
+/// escalation ladder (monthly → quarterly → half-year → yearly) so a long span
+/// stays within 12 buckets.
+public enum PerformanceGranularity: Equatable {
+    case daily, weekly, monthly, quarterly, halfYear, yearly
+
+    public var label: String {
+        switch self {
+        case .daily: return "Daily"
+        case .weekly: return "Weekly"
+        case .monthly: return "Monthly"
+        case .quarterly: return "Quarterly"
+        case .halfYear: return "Half-Year"
+        case .yearly: return "Yearly"
+        }
+    }
+
+    /// Month step for month-based tiers; `nil` for day-based tiers.
+    var monthStep: Int? {
+        switch self {
+        case .monthly: return 1
+        case .quarterly: return 3
+        case .halfYear: return 6
+        case .yearly: return 12
+        case .daily, .weekly: return nil
+        }
+    }
+}
+
 /// Trend of a data point relative to the previous one.
 public enum PerformanceTrend: Equatable { case up, down, stable }
 
@@ -84,48 +113,53 @@ public enum PerformanceAnalytics {
         return Double(sum) / Double(tasks.count)
     }
 
-    /// Last-6-weeks series (oldest → newest). Each bucket is a contiguous 7-day
-    /// window; the most recent one **ends today**, and each is labeled by its
-    /// beginning date (`MMM d`).
-    public static func weeklySeries(_ tasks: [Task], now: Date = Date()) -> [PerformanceDataPoint] {
+    /// Bucket granularity for the trend chart, chosen from the window span so it
+    /// stays within 12 buckets (Week→daily, Month→weekly, up to 12mo→monthly,
+    /// 36mo→quarterly, 72mo→half-year, else yearly).
+    public static func granularity(
+        for period: PerformancePeriod,
+        tasks: [Task] = [],
+        customStart: Date? = nil,
+        now: Date = Date()
+    ) -> PerformanceGranularity {
         let cal = calendar
-        var points: [PerformanceDataPoint] = []
-        for i in stride(from: 5, through: 0, by: -1) {
-            let weekEnd = cal.date(byAdding: .day, value: -i * 7, to: now) ?? now
-            let weekStart = cal.date(byAdding: .day, value: -7, to: weekEnd) ?? weekEnd
-            let weekTasks = tasks.filter { task in
-                guard let d = task.completedAt else { return false }
-                return d > weekStart && d <= weekEnd
-            }
-            // Label by the week's first day (day after the exclusive lower bound).
-            let weekBegin = cal.date(byAdding: .day, value: 1, to: weekStart) ?? weekStart
-            points.append(PerformanceDataPoint(
-                period: shortLabel(weekBegin, format: "MMM d"),
-                average: average(weekTasks),
-                taskCount: weekTasks.count,
-                trend: .stable
-            ))
-        }
-        return applyTrends(points)
+        let start = windowStart(for: period, customStart: customStart, tasks: tasks, now: now)
+        let days = cal.dateComponents([.day], from: start, to: now).day ?? 0
+        let months = cal.dateComponents([.month], from: start, to: now).month ?? 0
+        if days <= 12 { return .daily }
+        if days <= 62 { return .weekly }
+        if months <= 12 { return .monthly }
+        if months <= 36 { return .quarterly }
+        if months <= 72 { return .halfYear }
+        return .yearly
     }
 
-    /// Last-6-months series (oldest → newest), labeled `MMM`.
-    public static func monthlySeries(_ tasks: [Task], now: Date = Date()) -> [PerformanceDataPoint] {
+    /// Adaptive trend series (oldest → newest): the bucket size follows the
+    /// selected period (daily / weekly / monthly), and the most recent bucket
+    /// ends today. Each point averages the `performanceRating` of the tasks
+    /// completed in its bucket.
+    public static func trendSeries(
+        _ tasks: [Task],
+        period: PerformancePeriod,
+        customStart: Date? = nil,
+        now: Date = Date()
+    ) -> [PerformanceDataPoint] {
         let cal = calendar
+        let gran = granularity(for: period, tasks: tasks, customStart: customStart, now: now)
+        let start = windowStart(for: period, customStart: customStart, tasks: tasks, now: now)
+        let count = bucketCount(granularity: gran, from: start, to: now, cal: cal)
+
         var points: [PerformanceDataPoint] = []
-        for i in stride(from: 5, through: 0, by: -1) {
-            let monthEnd = cal.date(byAdding: .month, value: -i, to: now) ?? now
-            var comps = cal.dateComponents([.year, .month], from: monthEnd)
-            comps.day = 1
-            let monthStart = cal.date(from: comps) ?? monthEnd
-            let monthTasks = tasks.filter { task in
+        for i in stride(from: count - 1, through: 0, by: -1) {
+            let b = bucket(index: i, granularity: gran, now: now, cal: cal)
+            let bucketTasks = tasks.filter { task in
                 guard let d = task.completedAt else { return false }
-                return d >= monthStart && d <= monthEnd
+                return d >= b.begin && d < b.end
             }
             points.append(PerformanceDataPoint(
-                period: shortLabel(monthStart, format: "MMM"),
-                average: average(monthTasks),
-                taskCount: monthTasks.count,
+                period: b.label,
+                average: average(bucketTasks),
+                taskCount: bucketTasks.count,
                 trend: .stable
             ))
         }
@@ -137,15 +171,97 @@ public enum PerformanceAnalytics {
         series.max { $0.average < $1.average }
     }
 
-    /// Overall trend comparing last vs first weekly average.
-    public static func overallTrend(_ weekly: [PerformanceDataPoint]) -> String {
-        guard weekly.count > 1, let first = weekly.first, let last = weekly.last else { return "N/A" }
+    /// Overall trend comparing the last vs first bucket average of a series.
+    public static func overallTrend(_ series: [PerformanceDataPoint]) -> String {
+        guard series.count > 1, let first = series.first, let last = series.last else { return "N/A" }
         if last.average > first.average { return "Improving" }
         if last.average < first.average { return "Declining" }
         return "Neutral"
     }
 
     // MARK: - Helpers
+
+    /// Start of the analysis window. For All Time this is the earliest completion
+    /// so buckets don't stretch back to the epoch.
+    private static func windowStart(
+        for period: PerformancePeriod, customStart: Date?, tasks: [Task], now: Date
+    ) -> Date {
+        if period == .allTime {
+            return tasks.compactMap(\.completedAt).min() ?? now
+        }
+        return dateRange(for: period, customStart: customStart, now: now).start
+    }
+
+    /// Number of buckets covering `[start, now]` at the given granularity
+    /// (clamped so the chart never shows more than 12 buckets).
+    private static func bucketCount(
+        granularity: PerformanceGranularity, from start: Date, to now: Date, cal: Calendar
+    ) -> Int {
+        let cap = 12
+        let n: Int
+        if let step = granularity.monthStep {
+            let months = cal.dateComponents([.month], from: start, to: now).month ?? 0
+            n = Int((Double(months) / Double(step)).rounded(.up))
+        } else if granularity == .weekly {
+            let days = cal.dateComponents([.day], from: start, to: now).day ?? 0
+            n = Int((Double(days) / 7.0).rounded(.up))
+        } else { // daily
+            n = cal.dateComponents([.day], from: cal.startOfDay(for: start), to: cal.startOfDay(for: now)).day ?? 0
+        }
+        return max(1, min(cap, n))
+    }
+
+    /// The `i`-th most recent bucket (`i == 0` is the current one). Windows are
+    /// half-open `[begin, end)`; month-based buckets are calendar-aligned.
+    private static func bucket(
+        index i: Int, granularity: PerformanceGranularity, now: Date, cal: Calendar
+    ) -> (begin: Date, end: Date, label: String) {
+        if let step = granularity.monthStep {
+            let base = alignedMonthStart(now, step: step, cal: cal)
+            let begin = cal.date(byAdding: .month, value: -i * step, to: base) ?? base
+            let end = cal.date(byAdding: .month, value: step, to: begin) ?? begin
+            return (begin, end, monthTierLabel(begin, granularity: granularity, cal: cal))
+        }
+        switch granularity {
+        case .daily:
+            let day = cal.date(byAdding: .day, value: -i, to: now) ?? now
+            let begin = cal.startOfDay(for: day)
+            let end = cal.date(byAdding: .day, value: 1, to: begin) ?? day
+            return (begin, end, shortLabel(begin, format: "MMM d"))
+        default: // weekly
+            let end = cal.date(byAdding: .day, value: -7 * i, to: now) ?? now
+            let begin = cal.date(byAdding: .day, value: -7, to: end) ?? end
+            return (begin, end, shortLabel(begin, format: "MMM d"))
+        }
+    }
+
+    /// First day of the `step`-month block containing `date` (e.g. calendar
+    /// quarter / half / year start).
+    private static func alignedMonthStart(_ date: Date, step: Int, cal: Calendar) -> Date {
+        let c = cal.dateComponents([.year, .month], from: date)
+        let absMonth = (c.year ?? 0) * 12 + ((c.month ?? 1) - 1)
+        let aligned = (absMonth / step) * step
+        var out = DateComponents()
+        out.year = aligned / 12
+        out.month = aligned % 12 + 1
+        out.day = 1
+        return cal.date(from: out) ?? date
+    }
+
+    /// Label for a month-based bucket beginning at `begin`.
+    private static func monthTierLabel(_ begin: Date, granularity: PerformanceGranularity, cal: Calendar) -> String {
+        switch granularity {
+        case .quarterly:
+            return shortLabel(begin, format: "QQQ ''yy")   // e.g. "Q3 '26"
+        case .yearly:
+            return shortLabel(begin, format: "yyyy")        // e.g. "2026"
+        case .halfYear:
+            let half = (cal.component(.month, from: begin) - 1) < 6 ? 1 : 2
+            return "H\(half) \(shortLabel(begin, format: "''yy"))" // e.g. "H2 '26"
+        default: // monthly — include year so names don't collide across years
+            return shortLabel(begin, format: "MMM ''yy")    // e.g. "Jul '26"
+        }
+    }
 
     private static func applyTrends(_ points: [PerformanceDataPoint]) -> [PerformanceDataPoint] {
         var result = points

@@ -231,16 +231,20 @@ optional notes. Saving emits `(rating, notes?)`.
   stats) and a **"Trends"** section (charts + insights), with a **"Recent
   Performance"** section below.
 - **Stat cards**: tasks completed in period, and average performance (one decimal).
-- **Weekly chart** (Swift Charts) — the period's tasks bucketed across the last
-  6 weeks (each bucket labeled by its start date): average performance each week;
-  each point colored by `PerformancePreferencesService`. Faint dashed **reference
-  lines** mark the current cutoff thresholds, each labeled near its right end
-  (inset from the edge) with the level name it opens (Fair/Good/Very Good/
-  Excellent), colored to match.
-- **Monthly chart** — last 6 months, same idea.
-- **Insights**: Best Week, Best Month (max-average bucket), Overall Trend
-  (Improving/Declining/Neutral, last vs first weekly average), and Best Rating
-  (highest rating in the period) — all over the selected period.
+- **Trend chart** (Swift Charts) — a single line/point chart whose bucket
+  granularity **follows the window span**, escalating to stay within 12 buckets:
+  daily (≤12 days) → weekly (≤~2 months) → monthly (≤12 mo) → quarterly (≤36 mo)
+  → half-year (≤72 mo) → yearly (capped at 12 buckets ≈ last 12 years). Month-based
+  buckets are calendar-aligned (e.g. `Q3 '26`, `H2 '26`, `2026`); the most recent
+  bucket ends today. Each point averages the `performanceRating` of the tasks
+  completed in its bucket, colored by `PerformancePreferencesService`. Faint dashed
+  **reference lines** mark the cutoff thresholds (labeled near their right end with
+  the level name they open, colored to match). **Tap/drag** a point to inspect its
+  period, average, and task count. Only the x/y axis lines show (no interior grid);
+  numeric labels sit on the left, and x labels rotate vertical past 8 buckets.
+- **Insights**: Best Period (max-average bucket), Overall Trend
+  (Improving/Declining/Neutral, last vs first bucket), and Best Rating (highest
+  rating in the period) — all over the selected period.
 - **Recent Performance**: up to 10 filtered tasks, each with a colored
   performance badge, completed date, rating/100, and notes. Touch and hold a row
   → **Edit Rating** context action. Empty period → empty-state message.

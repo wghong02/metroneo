@@ -155,8 +155,40 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(PerformanceAnalytics.average(filtered), 80)
     }
 
-    func testWeeklySeriesHasSixPoints() {
-        let series = PerformanceAnalytics.weeklySeries([])
-        XCTAssertEqual(series.count, 6)
+    func testGranularityFollowsPeriod() {
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .week), .daily)
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .month), .weekly)
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .year), .monthly)
+    }
+
+    func testGranularityEscalatesForLongSpans() {
+        let now = day("2026-07-22")
+        func allTime(earliest key: String) -> PerformanceGranularity {
+            let t = [Task(title: "t", deadline: Date(), completedAt: day(key), createDate: day(key))]
+            return PerformanceAnalytics.granularity(for: .allTime, tasks: t, now: now)
+        }
+        XCTAssertEqual(allTime(earliest: "2025-07-01"), .monthly)   // ~12 mo
+        XCTAssertEqual(allTime(earliest: "2024-01-01"), .quarterly) // ~30 mo
+        XCTAssertEqual(allTime(earliest: "2022-01-01"), .halfYear)  // ~54 mo
+        XCTAssertEqual(allTime(earliest: "2005-01-01"), .yearly)    // ~21 yr
+    }
+
+    func testTrendSeriesBucketsByGranularity() {
+        let now = day("2026-07-22")
+        // Week → 7 daily buckets ending today.
+        XCTAssertEqual(PerformanceAnalytics.trendSeries([], period: .week, now: now).count, 7)
+        // Year → 12 monthly buckets.
+        XCTAssertEqual(PerformanceAnalytics.trendSeries([], period: .year, now: now).count, 12)
+    }
+
+    func testTrendSeriesBucketsATaskByCompletionDate() {
+        let now = day("2026-07-22")
+        let tasks = [Task(title: "t", deadline: Date(), performanceRating: 90,
+                          completedAt: day("2026-07-22"), createDate: day("2026-07-01"))]
+        let series = PerformanceAnalytics.trendSeries(tasks, period: .week, now: now)
+        // The task completed today lands in the most recent (last) bucket.
+        XCTAssertEqual(series.last?.taskCount, 1)
+        XCTAssertEqual(series.last?.average, 90)
+        XCTAssertEqual(series.dropLast().reduce(0) { $0 + $1.taskCount }, 0)
     }
 }
