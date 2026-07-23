@@ -217,6 +217,14 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(series.dropLast().reduce(0) { $0 + $1.taskCount }, 0)
     }
 
+    func testWeeklyBucketLabelsUseEndDay() {
+        let now = day("2026-07-23")
+        // Month → weekly buckets; the most recent bucket is labeled by its end
+        // (today), not its start.
+        let series = PerformanceAnalytics.trendSeries([], period: .month, now: now)
+        XCTAssertEqual(series.last?.period, "Jul 23")
+    }
+
     func testOverallTrendNeutralBand() {
         func pt(_ avg: Double) -> PerformanceDataPoint {
             PerformanceDataPoint(period: "\(avg)", average: avg, taskCount: 1, trend: .stable)

@@ -287,7 +287,10 @@ public enum PerformanceAnalytics {
         let endOfToday = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
         let end = cal.date(byAdding: .day, value: -step * i, to: endOfToday) ?? endOfToday
         let begin = cal.date(byAdding: .day, value: -step, to: end) ?? end
-        return (begin, end, shortLabel(begin, format: "MMM d"))
+        // Label with the window's last included day (its end — today for the most
+        // recent bucket), since `end` itself is the exclusive start of the next day.
+        let lastDay = cal.date(byAdding: .day, value: -1, to: end) ?? begin
+        return (begin, end, shortLabel(lastDay, format: "MMM d"))
     }
 
     /// First day of the `step`-month block containing `date` (e.g. calendar
