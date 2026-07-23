@@ -117,17 +117,19 @@ public enum PerformanceAnalytics {
         return (start, end)
     }
 
-    /// Completed tasks whose `completedAt` falls within the period.
+    /// Completed tasks whose `completedAt` falls within the analysis window. The
+    /// window starts at the earliest trend bucket (not the raw period start) so the
+    /// "Tasks Completed" stat and the chart always cover exactly the same tasks.
     public static func filteredTasks(
         _ tasks: [Task],
         period: PerformancePeriod,
         customStart: Date? = nil,
         now: Date = Date()
     ) -> [Task] {
-        let range = dateRange(for: period, customStart: customStart, now: now)
+        let start = alignedStart(for: period, tasks: tasks, customStart: customStart, now: now, cal: calendar)
         return tasks.filter { task in
             guard let d = task.completedAt else { return false }
-            return d >= range.start && d <= range.end
+            return d >= start && d <= now
         }
     }
 
@@ -229,6 +231,18 @@ public enum PerformanceAnalytics {
             return tasks.compactMap(\.completedAt).min() ?? now
         }
         return dateRange(for: period, customStart: customStart, now: now).start
+    }
+
+    /// The earliest instant the trend buckets actually cover (the begin of the
+    /// oldest bucket). Buckets are anchored to `now`, so this — not the raw period
+    /// start — is the true window edge that the stats must share with the chart.
+    private static func alignedStart(
+        for period: PerformancePeriod, tasks: [Task], customStart: Date?, now: Date, cal: Calendar
+    ) -> Date {
+        let gran = granularity(for: period, tasks: tasks, customStart: customStart, now: now)
+        let start = windowStart(for: period, customStart: customStart, tasks: tasks, now: now)
+        let count = bucketCount(granularity: gran, from: start, to: now, cal: cal)
+        return bucket(index: count - 1, granularity: gran, now: now, cal: cal).begin
     }
 
     /// Number of buckets covering `[start, now]` at the given granularity

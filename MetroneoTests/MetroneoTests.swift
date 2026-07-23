@@ -162,6 +162,23 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(PerformanceAnalytics.average(filtered), 80)
     }
 
+    func testFilteredCountMatchesTrendBuckets() {
+        let now = day("2026-07-22")
+        // Completions on each of the last 10 days, incl. the window's old edge.
+        let tasks = (0..<10).map { i in
+            Task(title: "t\(i)", deadline: Date(), performanceRating: 70,
+                 completedAt: Calendar.current.date(byAdding: .day, value: -i, to: now)!,
+                 createDate: day("2026-07-01"))
+        }
+        for period in [PerformancePeriod.week, .month, .threeMonths] {
+            let filtered = PerformanceAnalytics.filteredTasks(tasks, period: period, now: now)
+            let bucketTotal = PerformanceAnalytics.trendSeries(tasks, period: period, now: now)
+                .reduce(0) { $0 + $1.taskCount }
+            XCTAssertEqual(filtered.count, bucketTotal,
+                           "\(period) stat count and chart buckets must cover the same tasks")
+        }
+    }
+
     func testGranularityFollowsPeriod() {
         XCTAssertEqual(PerformanceAnalytics.granularity(for: .week), .daily)
         XCTAssertEqual(PerformanceAnalytics.granularity(for: .month), .weekly)

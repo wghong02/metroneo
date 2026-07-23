@@ -12,6 +12,7 @@ struct EventEditorSheet: View {
     @State private var startTime: Date
     @State private var endTime: Date
     @State private var notes: String
+    @State private var showEndBeforeStartAlert = false
 
     init(event: Event?, onSave: @escaping (Event) -> Void) {
         self.existing = event
@@ -50,12 +51,22 @@ struct EventEditorSheet: View {
                     Button("Save") { save() }.fontWeight(.bold)
                 }
             }
+            .alert("Invalid Time", isPresented: $showEndBeforeStartAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("End time must be after the start time.")
+            }
         }
     }
 
     private func save() {
         // Empty title just closes (matches original).
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { dismiss(); return }
+        // Timed events must end after they start (start/end share the event's day).
+        guard allDay || endTime > startTime else {
+            showEndBeforeStartAlert = true
+            return
+        }
         let event = Event(
             id: existing?.id ?? Event.makeID(),
             date: existing?.date ?? Date(),

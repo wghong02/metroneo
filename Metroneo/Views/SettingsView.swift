@@ -78,7 +78,13 @@ struct PerformanceCutoffsView: View {
     @State private var good = 0
     @State private var veryGood = 0
     @State private var excellent = 0
-    @State private var savedAlert = false
+    @State private var cutoffAlert: CutoffAlert?
+
+    private struct CutoffAlert: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
 
     var body: some View {
         Form {
@@ -102,9 +108,9 @@ struct PerformanceCutoffsView: View {
         }
         .navigationTitle("Performance Cutoffs")
         .onAppear(perform: seed)
-        .alert("Success", isPresented: $savedAlert) {
-            Button("OK", role: .cancel) {}
-        } message: { Text("Performance cutoffs saved successfully!") }
+        .alert(item: $cutoffAlert) { a in
+            Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
+        }
     }
 
     private func cutoffRow(_ label: String, value: Binding<Int>) -> some View {
@@ -125,10 +131,22 @@ struct PerformanceCutoffsView: View {
     }
 
     private func save() {
+        guard [fair, good, veryGood, excellent].allSatisfy({ (0...100).contains($0) }) else {
+            cutoffAlert = CutoffAlert(title: "Invalid Cutoffs",
+                                      message: "Each threshold must be between 0 and 100.")
+            return
+        }
+        // Levels cascade highest-first, so out-of-order thresholds silently
+        // mis-classify ratings. Require them to be non-decreasing.
+        guard fair <= good, good <= veryGood, veryGood <= excellent else {
+            cutoffAlert = CutoffAlert(title: "Invalid Cutoffs",
+                                      message: "Thresholds must not decrease: Fair ≤ Good ≤ Very Good ≤ Excellent.")
+            return
+        }
         preferences.setCutoffs(PerformanceCutoffs(
             fair: fair, good: good, veryGood: veryGood, excellent: excellent
         ))
         seed()
-        savedAlert = true
+        cutoffAlert = CutoffAlert(title: "Success", message: "Performance cutoffs saved successfully!")
     }
 }
