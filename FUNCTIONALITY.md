@@ -231,20 +231,26 @@ optional notes. Saving emits `(rating, notes?)`.
   stats) and a **"Trends"** section (charts + insights), with a **"Recent
   Performance"** section below.
 - **Stat cards**: tasks completed in period, and average performance (one decimal).
-- **Trend chart** (Swift Charts) — a single line/point chart whose bucket
-  granularity **follows the window span**, escalating to stay within 12 buckets:
-  daily (≤12 days) → weekly (≤~2 months) → monthly (≤12 mo) → quarterly (≤36 mo)
-  → half-year (≤72 mo) → yearly (capped at 12 buckets ≈ last 12 years). Month-based
-  buckets are calendar-aligned (e.g. `Q3 '26`, `H2 '26`, `2026`); the most recent
-  bucket ends today. Each point averages the `performanceRating` of the tasks
-  completed in its bucket, colored by `PerformancePreferencesService`. Faint dashed
-  **reference lines** mark the cutoff thresholds (labeled near their right end with
-  the level name they open, colored to match). **Tap/drag** a point to inspect its
-  period, average, and task count. Only the x/y axis lines show (no interior grid);
-  numeric labels sit on the left, and x labels rotate vertical past 8 buckets.
-- **Insights**: Best Period (max-average bucket), Overall Trend
-  (Improving/Declining/Neutral, last vs first bucket), and Best Rating (highest
-  rating in the period) — all over the selected period.
+- **Trend charts** (Swift Charts) — two stacked plots sharing one x-axis and a
+  legend. Bucket granularity **follows the window span**, escalating to stay within
+  12 buckets: daily (≤12 days) → weekly (≤~2 months) → biweekly (3 Months) →
+  monthly (≤12 mo) → quarterly (≤36 mo) → half-year (≤72 mo) → yearly (capped at
+  12 buckets ≈ last 12 years). Month-based buckets are calendar-aligned (e.g.
+  `Q3 '26`, `H2 '26`, `2026`); the most recent bucket ends today.
+  - **Top plot** — each bucket's average `performanceRating` as a line on a 0–100
+    axis, colored by `PerformancePreferencesService`, with dashed **reference
+    lines** at the cutoff thresholds (each colored by the level it opens).
+  - **Bottom plot** — each bucket's **task count** as a stacked bar, segmented by
+    performance category (the distribution).
+  - A shared **legend** maps each color to its category (Excellent → Poor).
+  - **Tap/drag** the top plot to inspect a bucket's period, average, and task
+    count. Each plot has its own x-axis; only the x/y axis lines show (no interior
+    grid); x labels rotate vertical past 8 buckets; category order is pinned
+    oldest → newest.
+- **Insights**: Best Period (max-average bucket), Overall Trend (last vs first
+  bucket average — Improving/Declining, or **Neutral** when the % change relative
+  to the first bucket is within ±5%), and Best Rating (highest rating in the
+  period) — all over the selected period.
 - **Recent Performance**: up to 10 filtered tasks, each with a colored
   performance badge, completed date, rating/100, and notes. Touch and hold a row
   → **Edit Rating** context action. Empty period → empty-state message.

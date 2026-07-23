@@ -158,6 +158,7 @@ final class PerformanceTests: XCTestCase {
     func testGranularityFollowsPeriod() {
         XCTAssertEqual(PerformanceAnalytics.granularity(for: .week), .daily)
         XCTAssertEqual(PerformanceAnalytics.granularity(for: .month), .weekly)
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .threeMonths), .biweekly)
         XCTAssertEqual(PerformanceAnalytics.granularity(for: .year), .monthly)
     }
 
@@ -190,5 +191,16 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(series.last?.taskCount, 1)
         XCTAssertEqual(series.last?.average, 90)
         XCTAssertEqual(series.dropLast().reduce(0) { $0 + $1.taskCount }, 0)
+    }
+
+    func testOverallTrendNeutralBand() {
+        func pt(_ avg: Double) -> PerformanceDataPoint {
+            PerformanceDataPoint(period: "\(avg)", average: avg, taskCount: 1, trend: .stable)
+        }
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(80), pt(82)]), "Neutral")    // +2.5%
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(80), pt(84)]), "Neutral")    // +5% (boundary)
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(80), pt(88)]), "Improving")  // +10%
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(80), pt(72)]), "Declining")  // -10%
+        XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(0), pt(50)]), "Improving")   // from zero
     }
 }

@@ -20,12 +20,13 @@ public enum PerformancePeriod: String, CaseIterable {
 /// escalation ladder (monthly → quarterly → half-year → yearly) so a long span
 /// stays within 12 buckets.
 public enum PerformanceGranularity: Equatable {
-    case daily, weekly, monthly, quarterly, halfYear, yearly
+    case daily, weekly, biweekly, monthly, quarterly, halfYear, yearly
 
     public var label: String {
         switch self {
         case .daily: return "Daily"
         case .weekly: return "Weekly"
+        case .biweekly: return "Biweekly"
         case .monthly: return "Monthly"
         case .quarterly: return "Quarterly"
         case .halfYear: return "Half-Year"
@@ -40,7 +41,17 @@ public enum PerformanceGranularity: Equatable {
         case .quarterly: return 3
         case .halfYear: return 6
         case .yearly: return 12
-        case .daily, .weekly: return nil
+        case .daily, .weekly, .biweekly: return nil
+        }
+    }
+
+    /// Day step for day-based tiers; `nil` for month-based tiers.
+    var dayStep: Int? {
+        switch self {
+        case .daily: return 1
+        case .weekly: return 7
+        case .biweekly: return 14
+        case .monthly, .quarterly, .halfYear, .yearly: return nil
         }
     }
 }
@@ -48,17 +59,31 @@ public enum PerformanceGranularity: Equatable {
 /// Trend of a data point relative to the previous one.
 public enum PerformanceTrend: Equatable { case up, down, stable }
 
-/// One point in a weekly/monthly performance series.
+/// Number of tasks at a given performance level within a bucket.
+public struct LevelCount: Equatable {
+    public var level: PerformanceLevel
+    public var count: Int
+    public init(level: PerformanceLevel, count: Int) {
+        self.level = level
+        self.count = count
+    }
+}
+
+/// One point in the trend series.
 public struct PerformanceDataPoint: Equatable {
     public var period: String
     public var average: Double
     public var taskCount: Int
+    /// Per-category breakdown of the bucket's tasks (for the distribution bars).
+    public var levelCounts: [LevelCount]
     public var trend: PerformanceTrend
 
-    public init(period: String, average: Double, taskCount: Int, trend: PerformanceTrend) {
+    public init(period: String, average: Double, taskCount: Int,
+                levelCounts: [LevelCount] = [], trend: PerformanceTrend) {
         self.period = period
         self.average = average
         self.taskCount = taskCount
+        self.levelCounts = levelCounts
         self.trend = trend
     }
 }
@@ -114,8 +139,8 @@ public enum PerformanceAnalytics {
     }
 
     /// Bucket granularity for the trend chart, chosen from the window span so it
-    /// stays within 12 buckets (Week→daily, Month→weekly, up to 12mo→monthly,
-    /// 36mo→quarterly, 72mo→half-year, else yearly).
+    /// stays within 12 buckets (Week→daily, Month→weekly, 3 Months→biweekly, up to
+    /// 12mo→monthly, 36mo→quarterly, 72mo→half-year, else yearly).
     public static func granularity(
         for period: PerformancePeriod,
         tasks: [Task] = [],
@@ -128,6 +153,7 @@ public enum PerformanceAnalytics {
         let months = cal.dateComponents([.month], from: start, to: now).month ?? 0
         if days <= 12 { return .daily }
         if days <= 62 { return .weekly }
+        if days <= 168 { return .biweekly }   // ~3 months → biweekly
         if months <= 12 { return .monthly }
         if months <= 36 { return .quarterly }
         if months <= 72 { return .halfYear }
@@ -141,6 +167,7 @@ public enum PerformanceAnalytics {
     public static func trendSeries(
         _ tasks: [Task],
         period: PerformancePeriod,
+        cutoffs: PerformanceCutoffs = .defaults,
         customStart: Date? = nil,
         now: Date = Date()
     ) -> [PerformanceDataPoint] {
@@ -156,10 +183,16 @@ public enum PerformanceAnalytics {
                 guard let d = task.completedAt else { return false }
                 return d >= b.begin && d < b.end
             }
+            let levelCounts = PerformanceLevel.allCases.map { level in
+                LevelCount(level: level, count: bucketTasks.filter {
+                    PerformancePreferencesService.level(for: $0.performanceRating, cutoffs: cutoffs) == level
+                }.count)
+            }
             points.append(PerformanceDataPoint(
                 period: b.label,
                 average: average(bucketTasks),
                 taskCount: bucketTasks.count,
+                levelCounts: levelCounts,
                 trend: .stable
             ))
         }
@@ -172,10 +205,13 @@ public enum PerformanceAnalytics {
     }
 
     /// Overall trend comparing the last vs first bucket average of a series.
+    /// A percentage change (relative to the first bucket) within ±5% is Neutral.
     public static func overallTrend(_ series: [PerformanceDataPoint]) -> String {
         guard series.count > 1, let first = series.first, let last = series.last else { return "N/A" }
-        if last.average > first.average { return "Improving" }
-        if last.average < first.average { return "Declining" }
+        guard first.average != 0 else { return last.average > 0 ? "Improving" : "Neutral" }
+        let percentChange = (last.average - first.average) / first.average * 100
+        if percentChange > 5 { return "Improving" }
+        if percentChange < -5 { return "Declining" }
         return "Neutral"
     }
 
@@ -202,11 +238,11 @@ public enum PerformanceAnalytics {
         if let step = granularity.monthStep {
             let months = cal.dateComponents([.month], from: start, to: now).month ?? 0
             n = Int((Double(months) / Double(step)).rounded(.up))
-        } else if granularity == .weekly {
-            let days = cal.dateComponents([.day], from: start, to: now).day ?? 0
-            n = Int((Double(days) / 7.0).rounded(.up))
-        } else { // daily
+        } else if granularity == .daily {
             n = cal.dateComponents([.day], from: cal.startOfDay(for: start), to: cal.startOfDay(for: now)).day ?? 0
+        } else { // weekly / biweekly
+            let days = cal.dateComponents([.day], from: start, to: now).day ?? 0
+            n = Int((Double(days) / Double(granularity.dayStep ?? 7)).rounded(.up))
         }
         return max(1, min(cap, n))
     }
@@ -222,17 +258,19 @@ public enum PerformanceAnalytics {
             let end = cal.date(byAdding: .month, value: step, to: begin) ?? begin
             return (begin, end, monthTierLabel(begin, granularity: granularity, cal: cal))
         }
-        switch granularity {
-        case .daily:
+        if granularity == .daily {
             let day = cal.date(byAdding: .day, value: -i, to: now) ?? now
             let begin = cal.startOfDay(for: day)
             let end = cal.date(byAdding: .day, value: 1, to: begin) ?? day
             return (begin, end, shortLabel(begin, format: "MMM d"))
-        default: // weekly
-            let end = cal.date(byAdding: .day, value: -7 * i, to: now) ?? now
-            let begin = cal.date(byAdding: .day, value: -7, to: end) ?? end
-            return (begin, end, shortLabel(begin, format: "MMM d"))
         }
+        // weekly / biweekly: rolling windows of `step` calendar days, the most
+        // recent ending at the end of today (so the current bucket includes today).
+        let step = granularity.dayStep ?? 7
+        let endOfToday = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
+        let end = cal.date(byAdding: .day, value: -step * i, to: endOfToday) ?? endOfToday
+        let begin = cal.date(byAdding: .day, value: -step, to: end) ?? end
+        return (begin, end, shortLabel(begin, format: "MMM d"))
     }
 
     /// First day of the `step`-month block containing `date` (e.g. calendar

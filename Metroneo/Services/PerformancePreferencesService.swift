@@ -22,7 +22,7 @@ public struct PerformanceCutoffs: Codable, Equatable {
 
 /// Performance category label. The matching fill color lives in `Palette.swift`
 /// (a SwiftUI concern, kept out of the service).
-public enum PerformanceLevel: String {
+public enum PerformanceLevel: String, CaseIterable {
     case excellent = "Excellent"
     case veryGood = "Very Good"
     case good = "Good"

@@ -19,7 +19,8 @@ struct PerformanceView: View {
     }
     /// One adaptive trend series whose bucket size follows the selected period.
     private var trend: [PerformanceDataPoint] {
-        PerformanceAnalytics.trendSeries(tasks.tasks, period: period, customStart: customStart)
+        PerformanceAnalytics.trendSeries(tasks.tasks, period: period,
+                                         cutoffs: preferences.cutoffs, customStart: customStart)
     }
     private var granularity: PerformanceGranularity {
         PerformanceAnalytics.granularity(for: period, tasks: tasks.tasks, customStart: customStart)
@@ -71,7 +72,7 @@ struct PerformanceView: View {
 
     private var periodSelector: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("This Period")
+            sectionHeader("Period")
             Picker("Period", selection: $period) {
                 ForEach(PerformancePeriod.allCases, id: \.self) { p in
                     Text(p.label).tag(p)
@@ -95,62 +96,119 @@ struct PerformanceView: View {
     }
 
     private var trendCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(granularity.label) Performance").font(.headline)
-            Chart {
-                ForEach(cutoffLines, id: \.self) { threshold in
-                    RuleMark(y: .value("Cutoff", Double(threshold)))
-                        .foregroundStyle(.gray.opacity(0.3))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                        .annotation(position: .top, alignment: .trailing, spacing: 0) {
-                            Text(preferences.text(for: threshold))
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(preferences.color(for: threshold))
-                                .padding(.trailing, 6)
-                        }
-                }
-                ForEach(trend, id: \.period) { point in
-                    LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
-                        .interpolationMethod(.catmullRom)
-                    PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
-                        .foregroundStyle(preferences.color(for: Int(point.average)))
-                }
-                if let selectedPeriod, let point = trend.first(where: { $0.period == selectedPeriod }) {
-                    RuleMark(x: .value("Period", selectedPeriod))
-                        .foregroundStyle(.gray.opacity(0.4))
-                        .annotation(position: .top, spacing: 4,
-                                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                            selectionCallout(point)
-                        }
-                }
-            }
-            .chartYScale(domain: 0...100)
-            .chartXSelection(value: $selectedPeriod)
-            // Labels only — no interior grid; keep the x/y axis lines via the
-            // plot-area edges. Rotate x labels vertical once they get crowded,
-            // with extra spacing off the axis.
-            .chartXAxis {
-                AxisMarks {
-                    AxisValueLabel(
-                        orientation: verticalXLabels ? .vertical : .automatic,
-                        verticalSpacing: verticalXLabels ? 8 : nil
-                    )
-                }
-            }
-            .chartYAxis { AxisMarks(position: .leading) { AxisValueLabel() } }
-            .chartPlotStyle { plotArea in
-                plotArea
-                    .overlay(alignment: .leading) {
-                        Rectangle().fill(Color(.separator)).frame(width: 1)
-                    }
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color(.separator)).frame(height: 1)
-                    }
-            }
-            .frame(height: 200)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("\(granularity.label) Performance")
+                .font(.headline)
+                .padding(.bottom, 6)
+
+            performanceChart
+
+            Text("Tasks Completed")
+                .font(.headline)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+            distributionChart
+
+            distributionLegend
         }
         .padding()
         .cardStyle()
+    }
+
+    /// Top plot: average performance line (0–100) with cutoff reference lines.
+    private var performanceChart: some View {
+        Chart {
+            ForEach(cutoffLines, id: \.self) { threshold in
+                RuleMark(y: .value("Cutoff", Double(threshold)))
+                    .foregroundStyle(preferences.color(for: threshold).opacity(0.55))
+                    .lineStyle(StrokeStyle(lineWidth: 1.6, dash: [5, 3]))
+            }
+            ForEach(trend, id: \.period) { point in
+                LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
+                    .interpolationMethod(.catmullRom)
+                PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
+                    .symbolSize(25)
+                    .foregroundStyle(preferences.color(for: Int(point.average)))
+            }
+            if let selectedPeriod, let point = trend.first(where: { $0.period == selectedPeriod }) {
+                RuleMark(x: .value("Period", selectedPeriod))
+                    .foregroundStyle(.gray.opacity(0.4))
+                    .annotation(position: .top, spacing: 4,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                        selectionCallout(point)
+                    }
+            }
+        }
+        .chartYScale(domain: 0...100)
+        .chartXScale(domain: trend.map(\.period))
+        .chartXSelection(value: $selectedPeriod)
+        .chartXAxis {
+            AxisMarks {
+                AxisValueLabel(
+                    orientation: verticalXLabels ? .vertical : .automatic,
+                    verticalSpacing: verticalXLabels ? 8 : nil
+                )
+            }
+        }
+        .chartYAxis { AxisMarks(position: .leading) { yLabel($0.as(Double.self).map { Int($0) }) } }
+        .chartPlotStyle { edgedPlot($0) }
+        .frame(height: 170)
+    }
+
+    /// Bottom plot: task count per bucket, stacked by performance category.
+    private var distributionChart: some View {
+        Chart {
+            ForEach(trend, id: \.period) { point in
+                ForEach(point.levelCounts, id: \.level) { lc in
+                    if lc.count > 0 {
+                        BarMark(x: .value("Period", point.period), y: .value("Count", lc.count))
+                            .foregroundStyle(lc.level.color)
+                    }
+                }
+            }
+        }
+        .chartXScale(domain: trend.map(\.period))
+        .chartXAxis {
+            AxisMarks {
+                AxisValueLabel(
+                    orientation: verticalXLabels ? .vertical : .automatic,
+                    verticalSpacing: verticalXLabels ? 8 : nil
+                )
+            }
+        }
+        .chartYAxis { AxisMarks(position: .leading) { yLabel($0.as(Int.self)) } }
+        .chartPlotStyle { edgedPlot($0) }
+        .frame(height: 110)
+    }
+
+    /// Fixed-width y-axis label so the two stacked charts' plots line up.
+    private func yLabel(_ value: Int?) -> some AxisMark {
+        AxisValueLabel {
+            if let value {
+                Text("\(value)").frame(width: 24, alignment: .trailing)
+            }
+        }
+    }
+
+    /// Left + bottom axis lines, no interior grid.
+    private func edgedPlot(_ plotArea: some View) -> some View {
+        plotArea
+            .overlay(alignment: .leading) { Rectangle().fill(Color(.separator)).frame(width: 1) }
+            .overlay(alignment: .bottom) { Rectangle().fill(Color(.separator)).frame(height: 1) }
+    }
+
+    /// Category color key shown under the chart (bars + cutoff lines).
+    private var distributionLegend: some View {
+        HStack(spacing: 10) {
+            ForEach(PerformanceLevel.allCases, id: \.self) { level in
+                HStack(spacing: 4) {
+                    Circle().fill(level.color).frame(width: 8, height: 8)
+                    Text(level.rawValue).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .minimumScaleFactor(0.7)
     }
 
     /// Tap-to-inspect callout for a selected trend point.
