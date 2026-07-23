@@ -12,6 +12,8 @@ final class StoredTask {
     var title: String
     var notes: String?
     var deadline: Date
+    /// Default keeps this a lightweight SwiftData migration for existing stores.
+    var hasDeadlineTime: Bool = false
     var priorityRating: Int
     var performanceRating: Int
     var completedAt: Date?
@@ -32,6 +34,7 @@ final class StoredTask {
         title: String,
         notes: String?,
         deadline: Date,
+        hasDeadlineTime: Bool,
         priorityRating: Int,
         performanceRating: Int,
         completedAt: Date?,
@@ -49,6 +52,7 @@ final class StoredTask {
         self.title = title
         self.notes = notes
         self.deadline = deadline
+        self.hasDeadlineTime = hasDeadlineTime
         self.priorityRating = priorityRating
         self.performanceRating = performanceRating
         self.completedAt = completedAt

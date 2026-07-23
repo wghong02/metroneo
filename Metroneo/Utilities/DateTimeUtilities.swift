@@ -20,8 +20,8 @@ public enum DateTimeUtilities {
         gregorian.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) ?? Date()
     }
 
-    /// End-of-day (`23:59:59`) for a day. This is the deadline sentinel used when
-    /// no explicit time is set.
+    /// End-of-day (`23:59:59`) for a day — the "due by end of day" default used
+    /// for date-only deadlines (see ``Task/hasDeadlineTime``).
     public static func endOfDay(_ day: Date) -> Date {
         dateBySetting(day: day, hour: 23, minute: 59, second: 59)
     }
@@ -30,13 +30,6 @@ public enum DateTimeUtilities {
     public static func combine(day: Date, time: Date) -> Date {
         let t = gregorian.dateComponents([.hour, .minute], from: time)
         return dateBySetting(day: day, hour: t.hour ?? 0, minute: t.minute ?? 0, second: 0)
-    }
-
-    /// Whether a deadline carries an explicit time (i.e. is not the `23:59:59`
-    /// end-of-day sentinel).
-    public static func hasExplicitTime(_ deadline: Date) -> Bool {
-        let c = gregorian.dateComponents([.hour, .minute, .second], from: deadline)
-        return !(c.hour == 23 && c.minute == 59 && c.second == 59)
     }
 
     // MARK: - Display
@@ -50,11 +43,10 @@ public enum DateTimeUtilities {
         return df.string(from: date)
     }
 
-    /// Localized deadline display. Appends `"at <time>"` when the deadline carries
-    /// an explicit (non-end-of-day) time.
-    public static func formatDeadline(_ deadline: Date, locale: Locale = .current) -> String {
+    /// Localized deadline display. Appends `"at <time>"` when `hasTime` is set.
+    public static func formatDeadline(_ deadline: Date, hasTime: Bool, locale: Locale = .current) -> String {
         let dateDisplay = shortDate(deadline, locale: locale)
-        guard hasExplicitTime(deadline) else { return dateDisplay }
+        guard hasTime else { return dateDisplay }
         let tf = DateFormatter()
         tf.locale = locale
         tf.dateStyle = .none

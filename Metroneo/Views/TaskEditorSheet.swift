@@ -35,7 +35,7 @@ struct TaskEditorSheet: View {
         _createDate = State(initialValue: task?.createDate ?? Date())
         let deadline = task?.deadline
         _deadlineDate = State(initialValue: deadline ?? Date())
-        let hasTime = deadline.map(DateTimeUtilities.hasExplicitTime) ?? false
+        let hasTime = task?.hasDeadlineTime ?? false
         _useDeadlineTime = State(initialValue: hasTime)
         _deadlineTime = State(initialValue: hasTime ? (deadline ?? Date()) : DateTimeUtilities.time(hour: 23, minute: 59))
         _recurring = State(initialValue: task?.recurring ?? false)
@@ -173,6 +173,7 @@ struct TaskEditorSheet: View {
             title: safeTitle,
             notes: notes.trimmingCharacters(in: .whitespaces),
             deadline: deadline,
+            hasDeadlineTime: useDeadlineTime,
             priorityRating: Int(priority),
             performanceRating: Int(performance),
             completedAt: existing?.completedAt,

@@ -26,15 +26,20 @@ final class DateTimeUtilitiesTests: XCTestCase {
         let d = day("2026-07-21")
 
         let eod = DateTimeUtilities.endOfDay(d)
-        XCTAssertFalse(DateTimeUtilities.hasExplicitTime(eod))
         XCTAssertEqual(cal.component(.hour, from: eod), 23)
         XCTAssertEqual(cal.component(.minute, from: eod), 59)
 
         let nineThirty = cal.date(bySettingHour: 9, minute: 30, second: 0, of: d)!
         let combined = DateTimeUtilities.combine(day: d, time: nineThirty)
-        XCTAssertTrue(DateTimeUtilities.hasExplicitTime(combined))
         XCTAssertEqual(cal.component(.hour, from: combined), 9)
         XCTAssertEqual(cal.component(.minute, from: combined), 30)
+    }
+
+    func testFormatDeadlineShowsTimeOnlyWhenFlagged() {
+        let cal = Calendar.current
+        let deadline = cal.date(bySettingHour: 9, minute: 30, second: 0, of: day("2026-07-21"))!
+        XCTAssertFalse(DateTimeUtilities.formatDeadline(deadline, hasTime: false).contains("at"))
+        XCTAssertTrue(DateTimeUtilities.formatDeadline(deadline, hasTime: true).contains("at"))
     }
 }
 
@@ -45,6 +50,7 @@ final class SwiftDataDatabaseTests: XCTestCase {
         let db = try makeDB()
         try db.saveTasks([
             Task(id: "keep-me", title: "A", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
+                 hasDeadlineTime: true,
                  completedAt: day("2026-07-20"), createDate: day("2026-07-02"),
                  types: ["work"], subTasks: [SubTask(id: "s1", title: "child")]),
             Task(title: "B", deadline: DateTimeUtilities.endOfDay(day("2026-07-22")), createDate: day("2026-07-01"))
@@ -52,6 +58,7 @@ final class SwiftDataDatabaseTests: XCTestCase {
         let loaded = try db.loadTasks()
         XCTAssertEqual(loaded.map(\.title), ["A", "B"])          // createDate DESC
         XCTAssertEqual(loaded.first?.id, "keep-me")               // id preserved
+        XCTAssertEqual(loaded.first?.hasDeadlineTime, true)        // flag round-trips
         XCTAssertEqual(loaded.first?.types, ["work"])
         XCTAssertEqual(loaded.first?.completedAt, day("2026-07-20"))
         XCTAssertEqual(loaded.first?.subTasks.first?.id, "s1")

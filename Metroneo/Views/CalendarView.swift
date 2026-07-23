@@ -103,7 +103,7 @@ private struct CalendarTaskRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(task.title).font(.subheadline.bold())
-            Text("Deadline: \(DateTimeUtilities.formatDeadline(task.deadline))")
+            Text("Deadline: \(DateTimeUtilities.formatDeadline(task.deadline, hasTime: task.hasDeadlineTime))")
                 .font(.caption).foregroundStyle(.red)
             if let notes = task.notes, !notes.isEmpty {
                 Text(notes).font(.caption).foregroundStyle(.secondary)

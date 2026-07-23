@@ -157,7 +157,7 @@ private struct TaskCard: View {
                 Text(notes).font(.caption).italic().foregroundStyle(.secondary)
             }
 
-            Text("Created: \(DateTimeUtilities.shortDate(task.createDate)) | Deadline: \(DateTimeUtilities.formatDeadline(task.deadline))")
+            Text("Created: \(DateTimeUtilities.shortDate(task.createDate)) | Deadline: \(DateTimeUtilities.formatDeadline(task.deadline, hasTime: task.hasDeadlineTime))")
                 .font(.caption2).foregroundStyle(.secondary)
 
             if let types = task.types, !types.isEmpty {

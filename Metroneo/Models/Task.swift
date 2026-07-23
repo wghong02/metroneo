@@ -48,9 +48,11 @@ public struct Task: Codable, Identifiable, Equatable, Hashable {
     public var id: String?
     public var title: String
     public var notes: String?
-    /// Full deadline instant. A time of `23:59:59` marks an end-of-day deadline
-    /// with no explicit time (see ``DateTimeUtilities/hasExplicitTime(_:)``).
+    /// Full deadline instant. When ``hasDeadlineTime`` is false the time portion
+    /// is a "due by end of day" default and isn't shown to the user.
     public var deadline: Date
+    /// Whether ``deadline`` carries a user-chosen time (vs. a date-only deadline).
+    public var hasDeadlineTime: Bool
     /// 0–100, default 50.
     public var priorityRating: Int
     /// 0–100, default 50.
@@ -72,6 +74,7 @@ public struct Task: Codable, Identifiable, Equatable, Hashable {
         title: String,
         notes: String? = nil,
         deadline: Date,
+        hasDeadlineTime: Bool = false,
         priorityRating: Int = 50,
         performanceRating: Int = 50,
         completedAt: Date? = nil,
@@ -89,6 +92,7 @@ public struct Task: Codable, Identifiable, Equatable, Hashable {
         self.title = title
         self.notes = notes
         self.deadline = deadline
+        self.hasDeadlineTime = hasDeadlineTime
         self.priorityRating = priorityRating
         self.performanceRating = performanceRating
         self.completedAt = completedAt

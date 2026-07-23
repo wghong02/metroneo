@@ -40,8 +40,10 @@ Events use a required `id: String`.
   **never reassigned** across edits or saves.
 - `title` — required; defaults to `"New Task"` when blank.
 - `notes?`
-- `deadline: Date` — a full instant. A time of **`23:59:59`** marks an end-of-day
-  deadline with *no explicit time*; any other time is the user's chosen time.
+- `deadline: Date` — a full instant.
+- `hasDeadlineTime: Bool` — whether `deadline` carries a user-chosen time. When
+  false the deadline is date-only (`deadline` defaults to end-of-day) and no time
+  is shown; when true, `deadline`'s time is the user's chosen time.
 - `priorityRating: Int` — 0–100, default 50.
 - `performanceRating: Int` — 0–100, default 50.
 - `completedAt: Date?` — the completion instant, or **`nil`** when not complete
@@ -143,13 +145,11 @@ under `@performance_cutoffs`.
 ## 5. Utility functions (`DateTimeUtilities`)
 
 - **`startOfDay(date)`** / **`endOfDay(day)`** — local day boundaries; `endOfDay`
-  returns `23:59:59`, the "no explicit time" deadline sentinel.
+  returns `23:59:59`, the "due by end of day" default for date-only deadlines.
 - **`combine(day:time:)`** — merges a day's calendar date with a time-of-day.
-- **`hasExplicitTime(deadline)`** — false when the deadline is the `23:59:59`
-  end-of-day sentinel.
 - **`shortDate(date)`** — localized short date.
-- **`formatDeadline(deadline: Date)`** — localized date, plus `"<date> at <time>"`
-  when the deadline carries an explicit (non-end-of-day) time.
+- **`formatDeadline(deadline: Date, hasTime: Bool)`** — localized date, plus
+  `"<date> at <time>"` when `hasTime` is set.
 - **`incompleteTasks(_:forDate:)`** — tasks with `completedAt == nil` whose deadline
   falls on the same day as the target date.
 
@@ -207,8 +207,9 @@ default 50), Performance slider (0–100, default 50), Create Date (default toda
 Deadline date (default today) + optional deadline time, **Recurring** toggle →
 Frequency Pattern picker + Frequency Count, Estimated Duration (min), Task Types
 (add/remove chips), Subtasks (title+notes, add/remove; each gets `order`), Notes.
-The deadline is `endOfDay(day)` when no time is set, or `combine(day, time)` when a
-time is. New tasks start not-complete (`completedAt = nil`); editing preserves `id`.
+The deadline is `endOfDay(day)` with `hasDeadlineTime = false` when no time is set,
+or `combine(day, time)` with `hasDeadlineTime = true` when a time is. New tasks start
+not-complete (`completedAt = nil`); editing preserves `id`.
 
 ### 7.2 Performance Rating (`PerformanceRatingSheet`)
 A 0–100 slider (default 50; pre-filled with the task's rating when editing) plus
