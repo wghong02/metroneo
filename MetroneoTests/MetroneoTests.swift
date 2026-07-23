@@ -155,8 +155,8 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(PerformanceAnalytics.average(filtered), 80)
     }
 
-    func testWeeklySeriesHasFivePoints() {
+    func testWeeklySeriesHasSixPoints() {
         let series = PerformanceAnalytics.weeklySeries([])
-        XCTAssertEqual(series.count, 5)
+        XCTAssertEqual(series.count, 6)
     }
 }

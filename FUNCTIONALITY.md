@@ -218,18 +218,29 @@ optional notes. Saving emits `(rating, notes?)`.
 
 ## 8. Performance tab (`PerformanceView` + `PerformanceAnalytics`)
 
-- **Period selector**: Week / Month / 3 Months / Year / All Time / Custom.
+- **Period selector** (default **Month**): Week / Month / 3 Months / Year /
+  All Time / Custom.
   - Ranges end "now"; start = now − (7d / 1mo / 3mo / 1yr), All Time = epoch,
     Custom = a start date chosen with a `DatePicker` (bounded to today or earlier).
-  - Filters to **completed** tasks whose `completedAt` falls in range.
-- **Save** (checkmark) toolbar button — rating edits made here share the Tasks tab's
-  unsaved-changes state, so this Save persists them too.
+  - Selects the **completed** tasks whose `completedAt` falls in range. This one
+    filtered set scopes the **whole page** — stats, charts, insights, and the
+    recent list all derive from it, so the selector drives everything.
+  Rating edits made here mark the shared task state unsaved; they're persisted
+  from the Tasks tab's Save button (this analytics view has no Save control).
+- The page is split by a divider into a **"This Period"** section (selector +
+  stats) and a **"Trends"** section (charts + insights), with a **"Recent
+  Performance"** section below.
 - **Stat cards**: tasks completed in period, and average performance (one decimal).
-- **Weekly chart** (Swift Charts) — last 5 weeks: average performance of tasks
-  completed each week; each point colored by `PerformancePreferencesService`.
-- **Monthly chart** — last 5 months, same idea.
-- **Insights**: Best Week, Best Month (max-average period), Overall Trend
-  (Improving/Declining/Neutral, last vs first weekly average), Total Tasks.
+- **Weekly chart** (Swift Charts) — the period's tasks bucketed across the last
+  6 weeks (each bucket labeled by its start date): average performance each week;
+  each point colored by `PerformancePreferencesService`. Faint dashed **reference
+  lines** mark the current cutoff thresholds, each labeled near its right end
+  (inset from the edge) with the level name it opens (Fair/Good/Very Good/
+  Excellent), colored to match.
+- **Monthly chart** — last 6 months, same idea.
+- **Insights**: Best Week, Best Month (max-average bucket), Overall Trend
+  (Improving/Declining/Neutral, last vs first weekly average), and Best Rating
+  (highest rating in the period) — all over the selected period.
 - **Recent Performance**: up to 10 filtered tasks, each with a colored
   performance badge, completed date, rating/100, and notes. Touch and hold a row
   → **Edit Rating** context action. Empty period → empty-state message.

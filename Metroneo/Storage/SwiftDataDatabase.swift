@@ -70,8 +70,10 @@ public final class SwiftDataDatabase {
     }
 
     public func saveTasks(_ tasks: [Task]) throws {
-        // Full replace, preserving each incoming id.
-        try reset()
+        // Replace the whole task + subtask set (leaving events untouched),
+        // preserving each incoming id.
+        try context.delete(model: StoredSubTask.self)
+        try context.delete(model: StoredTask.self)
         for task in tasks {
             let row = StoredTask(
                 taskID: task.id ?? UUID().uuidString,

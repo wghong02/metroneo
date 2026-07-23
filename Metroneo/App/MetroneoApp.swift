@@ -8,6 +8,8 @@ struct MetroneoApp: App {
     @StateObject private var eventService: EventService
     @StateObject private var preferences = PerformancePreferencesService()
 
+    @Environment(\.scenePhase) private var scenePhase
+
     /// Kept so admin actions (stats/erase) in Settings can reach the DB.
     private let database: SwiftDataDatabase
 
@@ -29,6 +31,13 @@ struct MetroneoApp: App {
                     taskService.loadTasks()
                     eventService.loadEvents()
                 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Safety net: flush unsaved task edits when the app leaves the
+            // foreground (events already persist immediately).
+            if phase == .background, taskService.hasUnsavedChanges {
+                taskService.save()
+            }
         }
     }
 }

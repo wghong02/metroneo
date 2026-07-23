@@ -84,20 +84,23 @@ public enum PerformanceAnalytics {
         return Double(sum) / Double(tasks.count)
     }
 
-    /// Last-5-weeks series (oldest → newest), labeled by each week's Monday `MMM d`.
+    /// Last-6-weeks series (oldest → newest). Each bucket is a contiguous 7-day
+    /// window; the most recent one **ends today**, and each is labeled by its
+    /// beginning date (`MMM d`).
     public static func weeklySeries(_ tasks: [Task], now: Date = Date()) -> [PerformanceDataPoint] {
         let cal = calendar
         var points: [PerformanceDataPoint] = []
-        for i in stride(from: 4, through: 0, by: -1) {
+        for i in stride(from: 5, through: 0, by: -1) {
             let weekEnd = cal.date(byAdding: .day, value: -i * 7, to: now) ?? now
-            let weekStart = cal.date(byAdding: .day, value: -6, to: weekEnd) ?? weekEnd
-            let monday = mondayOfWeek(containing: weekStart, cal: cal)
+            let weekStart = cal.date(byAdding: .day, value: -7, to: weekEnd) ?? weekEnd
             let weekTasks = tasks.filter { task in
                 guard let d = task.completedAt else { return false }
-                return d >= weekStart && d <= weekEnd
+                return d > weekStart && d <= weekEnd
             }
+            // Label by the week's first day (day after the exclusive lower bound).
+            let weekBegin = cal.date(byAdding: .day, value: 1, to: weekStart) ?? weekStart
             points.append(PerformanceDataPoint(
-                period: shortLabel(monday, format: "MMM d"),
+                period: shortLabel(weekBegin, format: "MMM d"),
                 average: average(weekTasks),
                 taskCount: weekTasks.count,
                 trend: .stable
@@ -106,11 +109,11 @@ public enum PerformanceAnalytics {
         return applyTrends(points)
     }
 
-    /// Last-5-months series (oldest → newest), labeled `MMM`.
+    /// Last-6-months series (oldest → newest), labeled `MMM`.
     public static func monthlySeries(_ tasks: [Task], now: Date = Date()) -> [PerformanceDataPoint] {
         let cal = calendar
         var points: [PerformanceDataPoint] = []
-        for i in stride(from: 4, through: 0, by: -1) {
+        for i in stride(from: 5, through: 0, by: -1) {
             let monthEnd = cal.date(byAdding: .month, value: -i, to: now) ?? now
             var comps = cal.dateComponents([.year, .month], from: monthEnd)
             comps.day = 1
@@ -143,12 +146,6 @@ public enum PerformanceAnalytics {
     }
 
     // MARK: - Helpers
-
-    private static func mondayOfWeek(containing date: Date, cal: Calendar) -> Date {
-        let weekday = cal.component(.weekday, from: date) // Sunday = 1
-        let daysToMonday = weekday == 1 ? 6 : weekday - 2
-        return cal.date(byAdding: .day, value: -daysToMonday, to: date) ?? date
-    }
 
     private static func applyTrends(_ points: [PerformanceDataPoint]) -> [PerformanceDataPoint] {
         var result = points

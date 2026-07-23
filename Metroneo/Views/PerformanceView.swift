@@ -7,15 +7,23 @@ struct PerformanceView: View {
     @EnvironmentObject private var tasks: TaskService
     @EnvironmentObject private var preferences: PerformancePreferencesService
 
-    @State private var period: PerformancePeriod = .week
+    @State private var period: PerformancePeriod = .month
     @State private var customStart = Date()
     @State private var ratingTarget: Task?
 
+    /// The selected period scopes the whole page: stats, charts, insights, and list
+    /// all derive from this one filtered set.
     private var filtered: [Task] {
         PerformanceAnalytics.filteredTasks(tasks.tasks, period: period, customStart: customStart)
     }
-    private var weekly: [PerformanceDataPoint] { PerformanceAnalytics.weeklySeries(tasks.tasks) }
-    private var monthly: [PerformanceDataPoint] { PerformanceAnalytics.monthlySeries(tasks.tasks) }
+    private var weekly: [PerformanceDataPoint] { PerformanceAnalytics.weeklySeries(filtered) }
+    private var monthly: [PerformanceDataPoint] { PerformanceAnalytics.monthlySeries(filtered) }
+
+    /// The rating thresholds drawn as reference lines on the charts.
+    private var cutoffLines: [Int] {
+        let c = preferences.cutoffs
+        return [c.fair, c.good, c.veryGood, c.excellent]
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,8 +36,11 @@ struct PerformanceView: View {
                         statCard(title: "Avg. Performance", value: String(format: "%.1f", PerformanceAnalytics.average(filtered)))
                     }
 
-                    chartCard(title: "Past 5 Weeks Performance", data: weekly)
-                    chartCard(title: "Past 5 Months Performance", data: monthly)
+                    Divider()
+
+                    sectionHeader("Trends")
+                    chartCard(title: "Past 6 Weeks Performance", data: weekly)
+                    chartCard(title: "Past 6 Months Performance", data: monthly)
 
                     insights
                     recentList
@@ -37,14 +48,6 @@ struct PerformanceView: View {
                 .padding()
             }
             .navigationTitle("Performance")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { tasks.save() } label: {
-                        Label("Save", systemImage: "checkmark")
-                    }
-                    .disabled(!tasks.hasUnsavedChanges)
-                }
-            }
             .sheet(item: $ratingTarget) { task in
                 PerformanceRatingSheet(task: task) { rating, notes in
                     if let id = task.id {
@@ -55,9 +58,13 @@ struct PerformanceView: View {
         }
     }
 
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title).font(.title3.bold())
+    }
+
     private var periodSelector: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Select Time Period").font(.headline)
+            sectionHeader("This Period")
             Picker("Period", selection: $period) {
                 ForEach(PerformancePeriod.allCases, id: \.self) { p in
                     Text(p.label).tag(p)
@@ -83,13 +90,39 @@ struct PerformanceView: View {
     private func chartCard(title: String, data: [PerformanceDataPoint]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.headline)
-            Chart(data, id: \.period) { point in
-                LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
-                    .interpolationMethod(.catmullRom)
-                PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
-                    .foregroundStyle(preferences.color(for: Int(point.average)))
+            Chart {
+                ForEach(cutoffLines, id: \.self) { threshold in
+                    RuleMark(y: .value("Cutoff", Double(threshold)))
+                        .foregroundStyle(.gray.opacity(0.3))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .annotation(position: .top, alignment: .trailing, spacing: 0) {
+                            Text(preferences.text(for: threshold))
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(preferences.color(for: threshold))
+                                .padding(.trailing, 6)
+                        }
+                }
+                ForEach(data, id: \.period) { point in
+                    LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
+                        .interpolationMethod(.catmullRom)
+                    PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
+                        .foregroundStyle(preferences.color(for: Int(point.average)))
+                }
             }
             .chartYScale(domain: 0...100)
+            // Labels only — no interior grid; keep the x/y axis lines via the
+            // plot-area edges.
+            .chartXAxis { AxisMarks { AxisValueLabel() } }
+            .chartYAxis { AxisMarks(position: .leading) { AxisValueLabel() } }
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(Color(.separator)).frame(width: 1)
+                    }
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color(.separator)).frame(height: 1)
+                    }
+            }
             .frame(height: 180)
         }
         .padding()
@@ -105,7 +138,7 @@ struct PerformanceView: View {
             }
             HStack {
                 insightItem("Overall Trend", PerformanceAnalytics.overallTrend(weekly))
-                insightItem("Total Tasks", "\(tasks.tasks.filter { $0.isCompleted }.count)")
+                insightItem("Best Rating", filtered.map(\.performanceRating).max().map { "\($0)" } ?? "N/A")
             }
         }
         .padding()
@@ -123,7 +156,7 @@ struct PerformanceView: View {
 
     private var recentList: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Performance").font(.title3.bold())
+            sectionHeader("Recent Performance")
 
             if filtered.isEmpty {
                 Text("No completed tasks in the selected time period. Complete some tasks to see your performance data!")
