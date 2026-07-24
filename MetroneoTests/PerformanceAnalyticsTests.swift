@@ -1,140 +1,7 @@
 import XCTest
 @testable import Metroneo
 
-/// Local start-of-day `Date` for a `"YYYY-MM-DD"` key.
-private func day(_ key: String) -> Date {
-    let p = key.split(separator: "-").compactMap { Int($0) }
-    return Calendar.current.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))!
-}
-
-final class DateTimeUtilitiesTests: XCTestCase {
-    func testIncompleteTasksForDate() {
-        let tasks = [
-            Task(title: "Due today", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
-                 completedAt: nil, createDate: day("2026-07-01")),
-            Task(title: "Done", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
-                 completedAt: day("2026-07-20"), createDate: day("2026-07-01")),
-            Task(title: "Other day", deadline: DateTimeUtilities.endOfDay(day("2026-07-22")),
-                 completedAt: nil, createDate: day("2026-07-01"))
-        ]
-        let result = DateTimeUtilities.incompleteTasks(tasks, forDate: day("2026-07-21"))
-        XCTAssertEqual(result.map(\.title), ["Due today"])
-    }
-
-    func testDeadlineComposition() {
-        let cal = Calendar.current
-        let d = day("2026-07-21")
-
-        let eod = DateTimeUtilities.endOfDay(d)
-        XCTAssertEqual(cal.component(.hour, from: eod), 23)
-        XCTAssertEqual(cal.component(.minute, from: eod), 59)
-
-        let nineThirty = cal.date(bySettingHour: 9, minute: 30, second: 0, of: d)!
-        let combined = DateTimeUtilities.combine(day: d, time: nineThirty)
-        XCTAssertEqual(cal.component(.hour, from: combined), 9)
-        XCTAssertEqual(cal.component(.minute, from: combined), 30)
-    }
-
-    func testFormatDeadlineShowsTimeOnlyWhenFlagged() {
-        let cal = Calendar.current
-        let deadline = cal.date(bySettingHour: 9, minute: 30, second: 0, of: day("2026-07-21"))!
-        XCTAssertFalse(DateTimeUtilities.formatDeadline(deadline, hasTime: false).contains("at"))
-        XCTAssertTrue(DateTimeUtilities.formatDeadline(deadline, hasTime: true).contains("at"))
-    }
-}
-
-final class SwiftDataDatabaseTests: XCTestCase {
-    private func makeDB() throws -> SwiftDataDatabase { try SwiftDataDatabase(inMemory: true) }
-
-    func testTaskRoundTripPreservesIDsAndSubtasks() throws {
-        let db = try makeDB()
-        try db.saveTasks([
-            Task(id: "keep-me", title: "A", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")),
-                 hasDeadlineTime: true,
-                 completedAt: day("2026-07-20"), createDate: day("2026-07-02"),
-                 types: ["work"], subTasks: [SubTask(id: "s1", title: "child")]),
-            Task(title: "B", deadline: DateTimeUtilities.endOfDay(day("2026-07-22")), createDate: day("2026-07-01"))
-        ])
-        let loaded = try db.loadTasks()
-        XCTAssertEqual(loaded.map(\.title), ["A", "B"])          // createDate DESC
-        XCTAssertEqual(loaded.first?.id, "keep-me")               // id preserved
-        XCTAssertEqual(loaded.first?.hasDeadlineTime, true)        // flag round-trips
-        XCTAssertEqual(loaded.first?.types, ["work"])
-        XCTAssertEqual(loaded.first?.completedAt, day("2026-07-20"))
-        XCTAssertEqual(loaded.first?.subTasks.first?.id, "s1")
-        XCTAssertEqual(loaded.first?.subTasks.first?.order, 0)
-    }
-
-    func testEventUpsertAndDelete() throws {
-        let db = try makeDB()
-        try db.saveEvent(Event(id: "e1", date: day("2026-07-21"), title: "Meeting"))
-        try db.saveEvent(Event(id: "e1", date: day("2026-07-21"), title: "Renamed"))
-        XCTAssertEqual(try db.loadEvents().map(\.title), ["Renamed"])  // upsert, not dup
-        try db.deleteEvent(id: "e1")
-        XCTAssertTrue(try db.loadEvents().isEmpty)
-    }
-}
-
-final class TaskServiceTests: XCTestCase {
-    private func makeDB() -> SwiftDataDatabase { try! SwiftDataDatabase(inMemory: true) }
-
-    private func sampleTask(_ title: String = "Write") -> Task {
-        Task(title: title, deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20"))
-    }
-
-    func testAddPersistsImmediately() {
-        let db = makeDB()
-        let s = TaskService(db: db)
-        s.addTask(sampleTask())
-        // A fresh service on the same store sees it — no manual save step.
-        XCTAssertEqual(TaskService(db: db).loadTasks().map(\.title), ["Write"])
-    }
-
-    func testCompletionAndRatingPersistAndIDsStay() {
-        let db = makeDB()
-        let s = TaskService(db: db)
-        s.addTask(sampleTask())
-        let id = s.tasks[0].id!
-
-        // Two edits against the same captured id — both must land on one task.
-        s.updateTaskPerformance(id: id, performance: 85, notes: "good")
-        s.completeTask(id: id)
-
-        let reloaded = TaskService(db: db)
-        reloaded.loadTasks()
-        XCTAssertEqual(reloaded.tasks.count, 1)
-        XCTAssertEqual(reloaded.tasks[0].id, id, "id must survive mutations")
-        XCTAssertTrue(reloaded.tasks[0].isCompleted)
-        XCTAssertEqual(reloaded.tasks[0].performanceRating, 85)
-    }
-
-    func testDeletePersists() {
-        let db = makeDB()
-        let s = TaskService(db: db)
-        s.addTask(sampleTask())
-        s.deleteTask(id: s.tasks[0].id!)
-        XCTAssertTrue(s.tasks.isEmpty)
-        XCTAssertTrue(TaskService(db: db).loadTasks().isEmpty)
-    }
-
-    func testBlankTitleDefaults() {
-        let s = TaskService(db: makeDB())
-        s.addTask(Task(title: "   ", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20")))
-        XCTAssertEqual(s.tasks[0].title, "New Task")
-    }
-
-    func testToggleSubTask() {
-        let s = TaskService(db: makeDB())
-        s.addTask(Task(title: "Parent", deadline: DateTimeUtilities.endOfDay(day("2026-07-21")), createDate: day("2026-07-20"),
-                       subTasks: [SubTask(title: "child")]))
-        let tid = s.tasks[0].id!
-        let sid = s.tasks[0].subTasks[0].id!
-        s.toggleSubTask(taskId: tid, subTaskId: sid)
-        XCTAssertTrue(s.tasks[0].subTasks[0].isCompleted)
-    }
-}
-
-final class PerformanceTests: XCTestCase {
+final class PerformanceAnalyticsTests: XCTestCase {
     func testLevelClassification() {
         let c = PerformanceCutoffs.defaults
         XCTAssertEqual(PerformancePreferencesService.level(for: 95, cutoffs: c), .excellent)
@@ -153,6 +20,26 @@ final class PerformanceTests: XCTestCase {
         let filtered = PerformanceAnalytics.filteredTasks(tasks, period: .week, now: now)
         XCTAssertEqual(filtered.map(\.title), ["recent"])
         XCTAssertEqual(PerformanceAnalytics.average(filtered), 80)
+    }
+
+    func testAverageOfEmptyIsZero() {
+        XCTAssertEqual(PerformanceAnalytics.average([]), 0)
+    }
+
+    func testDateRangeOffsets() {
+        let now = day("2026-07-22")
+        let cal = Calendar.current
+        XCTAssertEqual(PerformanceAnalytics.dateRange(for: .week, now: now).end, now)
+        XCTAssertEqual(PerformanceAnalytics.dateRange(for: .week, now: now).start,
+                       cal.date(byAdding: .day, value: -7, to: now))
+        XCTAssertEqual(PerformanceAnalytics.dateRange(for: .month, now: now).start,
+                       cal.date(byAdding: .month, value: -1, to: now))
+        XCTAssertEqual(PerformanceAnalytics.dateRange(for: .year, now: now).start,
+                       cal.date(byAdding: .year, value: -1, to: now))
+        XCTAssertEqual(PerformanceAnalytics.dateRange(for: .allTime, now: now).start,
+                       Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(PerformanceAnalytics.dateRange(for: .custom, customStart: day("2026-01-01"), now: now).start,
+                       day("2026-01-01"))
     }
 
     func testFilteredCountMatchesTrendBuckets() {
@@ -242,5 +129,42 @@ final class PerformanceTests: XCTestCase {
         // All-empty series has no best and no trend.
         XCTAssertNil(PerformanceAnalytics.best([pt(0, 0), pt(0, 0)]))
         XCTAssertEqual(PerformanceAnalytics.overallTrend([pt(0, 0), pt(0, 0)]), "N/A")
+    }
+
+    func testTrendSeriesLevelCountsDistribution() {
+        let now = day("2026-07-22")
+        // One task per category under the default cutoffs, all completed today.
+        let ratings = [95, 82, 76, 61, 30]   // excellent, veryGood, good, fair, poor
+        let tasks = ratings.map {
+            Task(title: "t\($0)", deadline: Date(), performanceRating: $0,
+                 completedAt: now, createDate: day("2026-07-01"))
+        }
+
+        let last = PerformanceAnalytics.trendSeries(tasks, period: .week, now: now).last!
+        XCTAssertEqual(last.taskCount, 5)
+        let counts = Dictionary(uniqueKeysWithValues: last.levelCounts.map { ($0.level, $0.count) })
+        XCTAssertEqual(counts[.excellent], 1)
+        XCTAssertEqual(counts[.veryGood], 1)
+        XCTAssertEqual(counts[.good], 1)
+        XCTAssertEqual(counts[.fair], 1)
+        XCTAssertEqual(counts[.poor], 1)
+
+        // The cutoffs argument is honored: lowering "Very Good" to 70 reclassifies
+        // both 82 and 76 as Very Good.
+        let custom = PerformanceCutoffs(fair: 50, good: 60, veryGood: 70, excellent: 90)
+        let lastCustom = PerformanceAnalytics.trendSeries(tasks, period: .week, cutoffs: custom, now: now).last!
+        let customCounts = Dictionary(uniqueKeysWithValues: lastCustom.levelCounts.map { ($0.level, $0.count) })
+        XCTAssertEqual(customCounts[.veryGood], 2)
+        XCTAssertEqual(customCounts[.good], 1)   // 61
+        XCTAssertEqual(customCounts[.poor], 1)   // 30
+    }
+
+    func testGranularityForCustomPeriod() {
+        let now = day("2026-07-22")
+        // A custom start's span drives the granularity like the fixed periods do.
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .custom, customStart: day("2026-07-16"), now: now), .daily)    // 6 days
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .custom, customStart: day("2026-06-01"), now: now), .weekly)   // ~51 days
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .custom, customStart: day("2026-04-01"), now: now), .biweekly) // ~112 days
+        XCTAssertEqual(PerformanceAnalytics.granularity(for: .custom, customStart: day("2026-01-01"), now: now), .monthly)  // ~6 months
     }
 }

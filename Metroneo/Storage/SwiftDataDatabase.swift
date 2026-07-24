@@ -41,10 +41,19 @@ public final class SwiftDataDatabase {
     }
 
     public func reset() throws {
-        try context.delete(model: StoredSubTask.self)
-        try context.delete(model: StoredTask.self)
+        try deleteAllStoredTasks()
         try context.delete(model: StoredEvent.self)
         try context.save()
+    }
+
+    /// Removes every task and (via its cascade rule) its subtasks. Tasks are
+    /// deleted object-by-object on purpose: a batch `delete(model:)` on the
+    /// children trips SwiftData's mandatory `StoredSubTask.parentTask` inverse,
+    /// and deleting the parents this way lets the cascade clear the subtasks.
+    private func deleteAllStoredTasks() throws {
+        for row in try context.fetch(FetchDescriptor<StoredTask>()) {
+            context.delete(row)
+        }
     }
 
     public func stats() -> DatabaseStats {
@@ -71,9 +80,8 @@ public final class SwiftDataDatabase {
 
     public func saveTasks(_ tasks: [Task]) throws {
         // Replace the whole task + subtask set (leaving events untouched),
-        // preserving each incoming id.
-        try context.delete(model: StoredSubTask.self)
-        try context.delete(model: StoredTask.self)
+        // preserving each incoming id. Deleting tasks cascades to their subtasks.
+        try deleteAllStoredTasks()
         for task in tasks {
             let row = StoredTask(
                 taskID: task.id ?? UUID().uuidString,
