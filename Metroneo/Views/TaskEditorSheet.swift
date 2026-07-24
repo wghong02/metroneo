@@ -125,7 +125,10 @@ struct TaskEditorSheet: View {
             .navigationTitle(existing == nil ? "New Task" : "Edit Task")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.bold) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { save() } label: { Label("Save", systemImage: "checkmark") }
+                        .labelStyle(.iconOnly).fontWeight(.bold)
+                }
             }
         }
     }

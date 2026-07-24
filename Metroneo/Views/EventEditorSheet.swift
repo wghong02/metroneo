@@ -48,7 +48,8 @@ struct EventEditorSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.fontWeight(.bold)
+                    Button { save() } label: { Label("Save", systemImage: "checkmark") }
+                        .labelStyle(.iconOnly).fontWeight(.bold)
                 }
             }
             .alert("Invalid Time", isPresented: $showEndBeforeStartAlert) {

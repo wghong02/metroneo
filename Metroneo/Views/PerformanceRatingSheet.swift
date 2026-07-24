@@ -38,10 +38,11 @@ struct PerformanceRatingSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button {
                         onSave(Int(rating), notes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : notes)
                         dismiss()
-                    }.fontWeight(.bold)
+                    } label: { Label("Save", systemImage: "checkmark") }
+                        .labelStyle(.iconOnly).fontWeight(.bold)
                 }
             }
         }
