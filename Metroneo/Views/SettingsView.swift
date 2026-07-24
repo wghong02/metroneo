@@ -13,6 +13,15 @@ struct SettingsView: View {
         let message: String
     }
 
+    /// "<marketing version> (<build>)", e.g. "1.0 (1)" — read from the synthesized
+    /// Info.plist (`CFBundleShortVersionString` / `CFBundleVersion`).
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "\(version) (\(build))"
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -42,6 +51,14 @@ struct SettingsView: View {
                     }
                 }
                 #endif
+
+                Section("About") {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text(Self.appVersion).foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("Settings")
             .alert(item: $alert) { a in

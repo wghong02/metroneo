@@ -265,10 +265,15 @@ optional notes. Saving emits `(rating, notes?)`.
   - **Database Management** — **Debug builds only** (compiled out of Release via
     `#if DEBUG`): Database Test (connection check), Database Stats (row counts),
     **Erase All Data** (`reset()`).
+  - **About** → read-only **Version** row showing `"<marketing> (<build>)"` (e.g.
+    `1.0 (1)`), read from the bundle's `CFBundleShortVersionString` /
+    `CFBundleVersion`.
 - **Personal Preferences** → row to **Performance Cutoffs**.
 - **Performance Cutoffs**: integer inputs for fair/good/veryGood/excellent
   (`TextField(value:format:)`, number-pad), **Save Changes**, **Reset to
-  Defaults**. Anything below "Fair" is "Poor".
+  Defaults**. Anything below "Fair" is "Poor". Save is rejected (with an alert) if
+  a threshold is outside `0…100` or the values are not non-decreasing
+  (`fair ≤ good ≤ veryGood ≤ excellent`).
 
 ---
 
