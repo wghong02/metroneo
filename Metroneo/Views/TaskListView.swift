@@ -78,12 +78,6 @@ struct TaskListView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { tasks.save() } label: {
-                        Label("Save", systemImage: "checkmark")
-                    }
-                    .disabled(!tasks.hasUnsavedChanges)
-                }
             }
             .sheet(isPresented: $creatingTask) {
                 TaskEditorSheet(task: nil) { tasks.addTask($0) }

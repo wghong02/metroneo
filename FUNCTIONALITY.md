@@ -105,12 +105,11 @@ Operations:
 delegate persistence to `SwiftDataDatabase` (or `UserDefaults` for preferences).
 
 ### 4.1 TaskService
-Holds an **in-memory working copy** of the task list. Mutations edit that copy and
-set `hasUnsavedChanges`; **nothing is written to the store until `save()`**. Because
-ids are stable, a captured id stays valid across any number of edits and saves.
-- `loadTasks()` — loads from the store and clears the dirty flag.
-- `save()` — persists the working copy, then reloads it.
-- `discardChanges()` — reloads from the store, dropping unsaved edits.
+Caches the task list and **persists every mutation immediately** — there is no
+manual save step. Each method edits the in-memory copy and then writes through to
+the store (and reloads). Because ids are stable, a captured id stays valid across
+any number of edits.
+- `loadTasks()` — loads from the store.
 - `addTask(task)` — assigns a stable id, defaults a blank title, appends.
 - `updateTask(updated)` — replaces the task with matching `id`.
 - `deleteTask(id)` — removes by id.
@@ -121,8 +120,8 @@ ids are stable, a captured id stays valid across any number of edits and saves.
 - `toggleSubTask(taskId, subTaskId)` — flips a subtask's `completedAt` (now ↔ nil).
 
 ### 4.2 EventService
-Caches events grouped by local start-of-day (`[Date: [Event]]`). Unlike tasks,
-event edits **persist immediately**.
+Caches events grouped by local start-of-day (`[Date: [Event]]`). Like tasks, event
+edits **persist immediately**.
 - `loadEvents()` — loads all, groups by start-of-day.
 - `addEvent(date, event)` / `updateEvent(date, event)` — normalize the event to that
   day and re-anchor its start/end times to it, upsert, update cache.
@@ -182,9 +181,9 @@ generates a new id. The service re-anchors the chosen times to the event's day.
 - Header segmented control: **Upcoming (n)** / **Completed (n)**.
   - Upcoming = not completed, sorted by `deadline` ascending.
   - Completed = completed, sorted by `completedAt` descending.
-- **Save** (checkmark) toolbar button — persists the working copy; enabled only when
-  there are unsaved changes. All the actions below stage edits **in memory** until
-  Save is tapped.
+- Every action below **persists immediately** — there is no Save button; creating or
+  editing a task in the modal, toggling completion, rating, and toggling subtasks all
+  write through to the store as they happen.
 - **Floating "+" button** opens the task editor.
 - Task card shows: checkbox (toggle completion), title (tap to edit),
   Priority + Performance/100, notes, `Created … | Deadline …`, type tags, a
@@ -226,8 +225,8 @@ optional notes. Saving emits `(rating, notes?)`.
   - Selects the **completed** tasks whose `completedAt` falls in range. This one
     filtered set scopes the **whole page** — stats, charts, insights, and the
     recent list all derive from it, so the selector drives everything.
-  Rating edits made here mark the shared task state unsaved; they're persisted
-  from the Tasks tab's Save button (this analytics view has no Save control).
+  Rating edits made here (via the recent list's Edit Rating) **persist immediately**,
+  like every other task mutation.
 - The page is split by a divider into a **"This Period"** section (selector +
   stats) and a **"Trends"** section (charts + insights), with a **"Recent
   Performance"** section below.

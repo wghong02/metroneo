@@ -3,14 +3,12 @@ import Combine
 
 /// Observable task cache backed by a ``SwiftDataDatabase`` (FUNCTIONALITY.md §4.1).
 ///
-/// Mutations edit an in-memory working copy and mark the service dirty; nothing
-/// is written to the database until ``save()`` is called. Ids are assigned once
-/// (when a task/subtask is first added) and never change, so captured ids stay
-/// valid across edits and saves — no reshuffle.
+/// Every mutation writes through to the database immediately — there is no manual
+/// save step. Each call edits the in-memory working copy and then persists it. Ids
+/// are assigned once (when a task/subtask is first added) and never change, so
+/// captured ids stay valid across edits and saves.
 public final class TaskService: ObservableObject {
     @Published public private(set) var tasks: [Task] = []
-    /// True when the working copy has edits not yet written to the database.
-    @Published public private(set) var hasUnsavedChanges = false
 
     private let db: SwiftDataDatabase
 
@@ -18,46 +16,30 @@ public final class TaskService: ObservableObject {
         self.db = db
     }
 
-    // MARK: - Persistence
+    // MARK: - Loading
 
     @discardableResult
     public func loadTasks() -> [Task] {
         tasks = (try? db.loadTasks()) ?? []
-        hasUnsavedChanges = false
         return tasks
     }
 
-    /// Persists the working copy. Ids are preserved by the store, so nothing is
-    /// reshuffled.
-    public func save() {
-        do {
-            try db.saveTasks(tasks)
-            tasks = (try? db.loadTasks()) ?? tasks
-            hasUnsavedChanges = false
-        } catch {
-            Log.taskError("Failed to save tasks: \(error)")
-        }
-    }
-
-    /// Drops unsaved edits, restoring the last persisted state.
-    public func discardChanges() { loadTasks() }
-
-    // MARK: - Mutations (in-memory; call `save()` to persist)
+    // MARK: - Mutations (each persists immediately)
 
     public func addTask(_ task: Task) {
         tasks.append(normalized(task))
-        hasUnsavedChanges = true
+        persist()
     }
 
     public func updateTask(_ updated: Task) {
         let task = normalized(updated)
         tasks = tasks.map { $0.id == task.id ? task : $0 }
-        hasUnsavedChanges = true
+        persist()
     }
 
     public func deleteTask(id: String) {
         tasks.removeAll { $0.id == id }
-        hasUnsavedChanges = true
+        persist()
     }
 
     public func completeTask(id: String) { mutate(id) { $0.completedAt = Date() } }
@@ -87,7 +69,19 @@ public final class TaskService: ObservableObject {
     private func mutate(_ id: String, _ change: (inout Task) -> Void) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         change(&tasks[index])
-        hasUnsavedChanges = true
+        persist()
+    }
+
+    /// Writes the working copy to the store, then reloads so persisted ids/order
+    /// are reflected. On a write failure the optimistic in-memory copy is kept.
+    private func persist() {
+        do {
+            try db.saveTasks(tasks)
+        } catch {
+            Log.taskError("Failed to save tasks: \(error)")
+            return
+        }
+        tasks = (try? db.loadTasks()) ?? tasks
     }
 
     /// Assigns stable ids to a new task/subtasks and normalizes titles and order.
