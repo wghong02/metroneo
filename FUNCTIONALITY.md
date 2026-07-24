@@ -237,10 +237,14 @@ optional notes. Saving emits `(rating, notes?)`.
   12 buckets: daily (≤12 days) → weekly (≤~2 months) → biweekly (3 Months) →
   monthly (≤12 mo) → quarterly (≤36 mo) → half-year (≤72 mo) → yearly (capped at
   12 buckets ≈ last 12 years). Month-based buckets are calendar-aligned (e.g.
-  `Q3 '26`, `H2 '26`, `2026`); the most recent bucket ends today.
+  `Q3 '26`, `H2 '26`, `2026`); the most recent bucket ends today. Day-based
+  (weekly/biweekly) buckets are labeled by their **end** day (today for the most
+  recent).
   - **Top plot** — each bucket's average `performanceRating` as a line on a 0–100
     axis, colored by `PerformancePreferencesService`, with dashed **reference
-    lines** at the cutoff thresholds (each colored by the level it opens).
+    lines** at the cutoff thresholds (each colored by the level it opens). The line
+    uses **monotone** interpolation, so the fitted curve never overshoots above 100
+    or below 0. Buckets with no completed tasks are a **gap** (not plotted as 0).
   - **Bottom plot** — each bucket's **task count** as a stacked bar, segmented by
     performance category (the distribution).
   - A shared **legend** maps each color to its category (Excellent → Poor).

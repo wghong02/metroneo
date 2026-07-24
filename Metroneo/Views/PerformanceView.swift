@@ -132,7 +132,10 @@ struct PerformanceView: View {
             // stay a gap on the line instead of dropping to a misleading 0.
             ForEach(trend.filter { $0.taskCount > 0 }, id: \.period) { point in
                 LineMark(x: .value("Period", point.period), y: .value("Average", point.average))
-                    .interpolationMethod(.catmullRom)
+                    // Monotone (not Catmull-Rom) so the fitted curve never
+                    // overshoots its data points — averages are in 0...100, so the
+                    // line is guaranteed to stay within 0...100 too.
+                    .interpolationMethod(.monotone)
                 PointMark(x: .value("Period", point.period), y: .value("Average", point.average))
                     .symbolSize(25)
                     .foregroundStyle(preferences.color(for: Int(point.average)))
